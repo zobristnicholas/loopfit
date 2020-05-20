@@ -1,0 +1,1 @@
+int eqn_cubic(const double *a, double *x);
