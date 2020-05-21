@@ -8,7 +8,7 @@ from libcpp cimport bool as bool_t
 from ._utils import *
 from ._utils cimport *
 from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c, model as model_c, fit as fit_c,
-                         calibrate as calibrate_c)
+                         calibrate as calibrate_c, detuning as detuning_c)
 
 
 @cython.boundscheck(False)
@@ -109,6 +109,33 @@ def resonance(f, *,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cdef detuning_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
+    cdef np.ndarray[DTYPE_float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+    for ii in range(f.shape[0]):
+        result[ii] = detuning_c(f[ii], decreasing, pr, pd)
+    return result
+
+
+def detuning(f, *,
+             bool_t decreasing=DEFAULT_DECREASING,
+             double qi=DEFAULT_QI,
+             double qc=DEFAULT_QC,
+             double f0=DEFAULT_F0,
+             double xa=DEFAULT_XA,
+             double a=DEFAULT_A,
+             **kwargs):
+    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    # create the parameter blocks
+    cdef double pr[4], pd[1]
+    create_resonance_block(&pr[0], qi, qc, f0, xa)
+    create_detuning_block(&pd[0], a)
+    # call function
+    result = detuning_vectorized(f.ravel(), decreasing, &pr[0], &pd[0])
+    return result.reshape(f.shape)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef model_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, double fm, bool_t decreasing, double pr[], double pd[],
                       double pb[], double pi[], double po[]):
     cdef np.ndarray[DTYPE_complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
@@ -148,7 +175,7 @@ def model(f, *,
     return result.reshape(f.shape)
 
 
-def guess(f, i, q, *, offset=None, imbalance=None, nonlinear=False, **kwargs):
+def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
         # estimate mixer correction from calibration data
         alpha, gamma, i_offset, q_offset = compute_mixer_calibration(offset, imbalance, **kwargs)
         # remove the IQ mixer offset and imbalance
@@ -176,8 +203,7 @@ def guess(f, i, q, *, offset=None, imbalance=None, nonlinear=False, **kwargs):
         # set some bounds (resonant frequency should not be within 5% of file end)
         f_min = min(f[f_index_5pc],  f[f_index_end - f_index_5pc])
         f_max = max(f[f_index_5pc],  f[f_index_end - f_index_5pc])
-        if not f_min < f0_guess < f_max:
-            f0_guess = fm
+        if not f_min < f0_guess < f_max: f0_guess = fm
         # guess Q values
         mag_max = np.polyval(gain_poly, xm(f[f_index_min]))
         mag_min = magnitude[f_index_min]
@@ -188,12 +214,11 @@ def guess(f, i, q, *, offset=None, imbalance=None, nonlinear=False, **kwargs):
         q0_guess = f0_guess / bandwidth if bandwidth != 0 else 1e4
         # Q0 / Qi = min(mag) / max(mag)
         qi_guess = q0_guess * mag_max / mag_min if mag_min != 0 else 1e5
-        if qi_guess == 0:
-            qi_guess = 1e5
-        if q0_guess == 0:
-            q0_guess = 1e4
+        if qi_guess == 0: qi_guess = 1e5
+        if q0_guess == 0: q0_guess = 1e4
         # 1 / Q0 = 1 / Qc + 1 / Qi
-        qc_guess = 1. / (1. / q0_guess - 1. / qi_guess) if (1. / q0_guess - 1. / qi_guess) != 0 else 1e4
+        qc_guess = 1. / (1. / q0_guess - 1. / qi_guess)
+        if qc_guess == 0: qc_guess = 1e4
 
         params = {'qi': qi_guess, 'qc': qc_guess, 'f0': f0_guess, 'xa': 0.0, 'a': 0 if not nonlinear else 0.0025,
                   'gain0': gain_poly[2], 'gain1': gain_poly[1], 'gain2': gain_poly[0], 'phase0': phase_poly[1],
@@ -214,6 +239,7 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
         bool_t nonlinear=False,
         bool_t imbalance=False,
         bool_t offset=False,
+        bool_t numerical=False,
         double qi=DEFAULT_QI,
         double qc=DEFAULT_QC,
         double f0=DEFAULT_F0,
@@ -255,7 +281,7 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
     # run the fitting code
     cdef string out
     out = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
-                offset, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+                offset, numerical, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
     print(out.decode("utf-8").strip())
 
     # return the fitted parameter values

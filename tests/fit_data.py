@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 
 
 f = np.linspace(4, 4 + 0.002, 1000)
-true_params = {'qi': 100000, 'qc': 30000, 'f0': np.median(f), 'xa': 5e-6, 'a': 0.4, 'alpha': 1.2, 'gamma': 0.2,
+true_params = {'qi': 100000, 'qc': 30000, 'f0': np.median(f), 'xa': 5e-6, 'a': 0.8, 'alpha': 1.2, 'gamma': 0.2,
                'gain0': 3.0, 'gain1': 1000.0, 'gain2': 50000.0, 'phase0': 2.0, 'phase1': -1000.0}
 
 loop = loopfit.model(f, **true_params)
@@ -12,7 +12,8 @@ loop += np.random.normal(0, 0.02, loop.shape) + 1j * np.random.normal(0, 0.02, l
 
 nonlinear = True
 init_params = loopfit.guess(f, loop.real, loop.imag, nonlinear=nonlinear, alpha=1.1, gamma=0.14)
-result = loopfit.fit(f, loop.real, loop.imag, baseline=True, nonlinear=nonlinear, imbalance=True, **init_params)
+result = loopfit.fit(f, loop.real, loop.imag, baseline=True, nonlinear=nonlinear, imbalance=True, numerical=False,
+                     **init_params)
 
 print("True:", true_params)
 print("Init:", init_params)
