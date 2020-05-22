@@ -17,8 +17,8 @@ log.addHandler(logging.NullHandler())
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef calibrate_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, np.ndarray[DTYPE_float64_t, ndim=1] i,
-                          np.ndarray[DTYPE_float64_t, ndim=1] q, double fm, double pb[], double pi[], double po[]):
+cdef calibrate_vectorized(np.ndarray[float_t, ndim=1] f, np.ndarray[float64_t, ndim=1] i,
+                          np.ndarray[float64_t, ndim=1] q, double fm, double pb[], double pi[], double po[]):
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
     for ii in range(f.shape[0]):
@@ -40,30 +40,52 @@ def calibrate(f, i=None, q=None, *,
               **kwargs):
     # check inputs
     if fm < 0: fm = np.median(f)  # default depends on f
-    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
     cdef double pb[5], pi[2], po[2]
     create_baseline_block(pb, gain0, gain1, gain2, phase0, phase1)
     create_imbalance_block(pi, alpha, gamma)
     create_offset_block(po, i_offset, q_offset)
-    # calibrate the data
+    # initialize output i & q arrays (copy since calibrate_c is in-place)
     if (i is not None) and (q is not None):
         i = np.array(i, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
         q = np.array(q, dtype=np.float64, copy=True)
-        calibrate_vectorized(f.ravel(), i.ravel(), q.ravel(), fm, pb, pi, po)
-        return i, q
+        z_output = False
     elif z is not None:
-        z = np.array(z, dtype=np.complex128, copy=True)
-        calibrate_vectorized(f.ravel(), z.ravel().real, z.ravel().imag, fm, pb, pi, po)
-        return z
+        i = np.array(z.real, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
+        q = np.array(z.imag, dtype=np.float64, copy=True)
+        z_output = True
     else:
         raise ValueError("Neither i and q or z were supplied as keyword arguments.")
+    # define types
+    cdef np.ndarray[float64_t, ndim=1] i_ravel = i.ravel()
+    cdef np.ndarray[float64_t, ndim=1] q_ravel = q.ravel()
+    cdef np.ndarray[float32_t, ndim=1] f_ravel32
+    cdef np.ndarray[float64_t, ndim=1] f_ravel64
+    if f.dtype == np.float64:
+        f_ravel64 = f.ravel()
+        f_type = '64'
+    elif f.dtype == np.float32:
+        f_ravel32 = f.ravel()
+        f_type = '32'
+    else:
+        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+
+    # calibrate the data
+    if f.dtype == np.float64:
+        calibrate_vectorized(f_ravel64, i_ravel, q_ravel, fm, pb, pi, po)
+    elif f.dtype == np.float32:
+        calibrate_vectorized(f_ravel32, i_ravel, q_ravel, fm, pb, pi, po)
+    if z_output:
+        return i + 1j * q
+    else:
+        return i, q
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef baseline_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, double fm, double pb[]):
-    cdef np.ndarray[DTYPE_complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+cdef baseline_vectorized(np.ndarray[float_t, ndim=1] f, double fm, double pb[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = baseline_c(f[ii], fm, pb)
     return result
@@ -77,19 +99,28 @@ def baseline(f, *,
              double phase1=DEFAULT_PHASE1,
              **kwargs):
     if fm < 0: fm = np.median(f)  # default depends on f
-    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
     cdef double pb[5]
     create_baseline_block(&pb[0], gain0, gain1, gain2, phase0, phase1)
     # call function
-    result = baseline_vectorized(f.ravel(), fm, &pb[0])
+    cdef np.ndarray[float32_t, ndim=1] f_ravel32
+    cdef np.ndarray[float64_t, ndim=1] f_ravel64
+    if f.dtype == np.float64:
+        f_ravel64 = f.ravel()
+        result = baseline_vectorized(f_ravel64, fm, &pb[0])
+    elif f.dtype == np.float32:
+        f_ravel32 = f.ravel()
+        result = baseline_vectorized(f_ravel32, fm, &pb[0])
+    else:
+        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
     return result.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef resonance_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
-    cdef np.ndarray[DTYPE_complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+cdef resonance_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = resonance_c(f[ii], decreasing, pr, pd)
     return result
@@ -103,20 +134,29 @@ def resonance(f, *,
               double xa=DEFAULT_XA,
               double a=DEFAULT_A,
               **kwargs):
-    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
     cdef double pr[4], pd[1]
     create_resonance_block(&pr[0], qi, qc, f0, xa)
     create_detuning_block(&pd[0], a)
     # call function
-    result = resonance_vectorized(f.ravel(), decreasing, &pr[0], &pd[0])
+    cdef np.ndarray[float32_t, ndim=1] f_ravel32
+    cdef np.ndarray[float64_t, ndim=1] f_ravel64
+    if f.dtype == np.float64:
+        f_ravel64 = f.ravel()
+        result = resonance_vectorized(f_ravel64, decreasing, &pr[0], &pd[0])
+    elif f.dtype == np.float32:
+        f_ravel32 = f.ravel()
+        result = resonance_vectorized(f_ravel32, decreasing, &pr[0], &pd[0])
+    else:
+        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
     return result.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef detuning_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
-    cdef np.ndarray[DTYPE_float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.float64)
+cdef detuning_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
+    cdef np.ndarray[float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.float64)
     for ii in range(f.shape[0]):
         result[ii] = detuning_c(f[ii], decreasing, pr, pd)
     return result
@@ -131,21 +171,30 @@ def detuning(f, *,
              double a=DEFAULT_A,
              **kwargs):
     if f0 < 0: f0 = kwargs.get('fm', np.median(f))
-    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
     cdef double pr[4], pd[1]
     create_resonance_block(&pr[0], qi, qc, f0, xa)
     create_detuning_block(&pd[0], a)
     # call function
-    result = detuning_vectorized(f.ravel(), decreasing, &pr[0], &pd[0])
+    cdef np.ndarray[float32_t, ndim=1] f_ravel32
+    cdef np.ndarray[float64_t, ndim=1] f_ravel64
+    if f.dtype == np.float64:
+        f_ravel64 = f.ravel()
+        result = detuning_vectorized(f_ravel64, decreasing, &pr[0], &pd[0])
+    elif f.dtype == np.float32:
+        f_ravel32 = f.ravel()
+        result = detuning_vectorized(f_ravel32, decreasing, &pr[0], &pd[0])
+    else:
+        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
     return result.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef model_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, double fm, bool_t decreasing, double pr[], double pd[],
+cdef model_vectorized(np.ndarray[float_t, ndim=1] f, double fm, bool_t decreasing, double pr[], double pd[],
                       double pb[], double pi[], double po[]):
-    cdef np.ndarray[DTYPE_complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = model_c(f[ii], fm, decreasing, pr, pd, pb, pi, po)
     return result
@@ -178,7 +227,16 @@ def model(f, *,
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
                             phase1, alpha, gamma, i_offset, q_offset)
     # call function
-    result = model_vectorized(f.ravel(), fm, decreasing, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+    cdef np.ndarray[float32_t, ndim=1] f_ravel32
+    cdef np.ndarray[float64_t, ndim=1] f_ravel64
+    if f.dtype == np.float64:
+        f_ravel64 = f.ravel()
+        result = model_vectorized(f_ravel64, fm, decreasing, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+    elif f.dtype == np.float32:
+        f_ravel32 = f.ravel()
+        result = model_vectorized(f_ravel32, fm, decreasing, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+    else:
+        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
     return result.reshape(f.shape)
 
 
@@ -240,9 +298,9 @@ def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
-        np.ndarray[DTYPE_float64_t, ndim=1] i,
-        np.ndarray[DTYPE_float64_t, ndim=1] q, *,
+def fit(np.ndarray[float_t, ndim=1] f,
+        np.ndarray[float2_t, ndim=1] i,
+        np.ndarray[float2_t, ndim=1] q, *,
         double fm=DEFAULT_FM,
         bool_t decreasing=DEFAULT_DECREASING,
         bool_t baseline=True,
@@ -280,9 +338,9 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
         i = np.ascontiguousarray(i)
     if not q.flags['C_CONTIGUOUS']:
         q = np.ascontiguousarray(q)
-    cdef double[::1] f_view = f
-    cdef double[::1] i_view = i
-    cdef double[::1] q_view = q
+    cdef float_t[::1] f_view = f
+    cdef float2_t[::1] i_view = i
+    cdef float2_t[::1] q_view = q
 
     # create the parameter blocks
     cdef double pr[4], pd[1], pb[5], pi[2], po[2]
@@ -293,7 +351,7 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
     cdef string out
     summary = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
                     offset, numerical, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
-    log.info(summary)
+    log.debug(summary)
 
     # return the fitted parameter values
     params = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear,

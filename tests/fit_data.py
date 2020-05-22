@@ -15,9 +15,7 @@ init_params = loopfit.guess(f, loop.real, loop.imag, nonlinear=nonlinear, alpha=
 result = loopfit.fit(f, loop.real, loop.imag, baseline=True, nonlinear=nonlinear, imbalance=True, numerical=False,
                      **init_params)
 
-print("True:", true_params)
-print("Init:", init_params)
-print("Fit:", result)
+print(result['summary'])
 
 plt.figure()
 plt.title("Data Coordinates")

@@ -1,3 +1,4 @@
+cimport cython
 import numpy as np
 cimport numpy as np
 from libc.math cimport sqrt, pow
@@ -25,8 +26,19 @@ cdef double DEFAULT_FM
 cdef bool_t DEFAULT_DECREASING
 
 # numpy types
-ctypedef np.float64_t DTYPE_float64_t
-ctypedef np.complex128_t DTYPE_complex128_t
+ctypedef np.float32_t float32_t
+ctypedef np.float64_t float64_t
+ctypedef fused  float_t:
+    np.float32_t
+    np.float64_t
+ctypedef fused  float2_t:  # for when two float types are needed
+    np.float32_t
+    np.float64_t
+ctypedef np.complex128_t complex64_t
+ctypedef np.complex128_t complex128_t
+ctypedef fused  complex_t:
+    np.complex64_t
+    np.complex128_t
 
 
 cdef inline create_resonance_block(double pr[4], double qi, double qc, double f0, double xa):
