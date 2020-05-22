@@ -116,7 +116,7 @@ def resonance(f, *,
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef detuning_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
-    cdef np.ndarray[DTYPE_float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+    cdef np.ndarray[DTYPE_float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.float64)
     for ii in range(f.shape[0]):
         result[ii] = detuning_c(f[ii], decreasing, pr, pd)
     return result
@@ -130,6 +130,7 @@ def detuning(f, *,
              double xa=DEFAULT_XA,
              double a=DEFAULT_A,
              **kwargs):
+    if f0 < 0: f0 = kwargs.get(fm, np.median(f))
     f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
     # create the parameter blocks
     cdef double pr[4], pd[1]
@@ -262,7 +263,8 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
         double alpha=DEFAULT_ALPHA,
         double gamma=DEFAULT_GAMMA,
         double i_offset=DEFAULT_I_OFFSET,
-        double q_offset=DEFAULT_Q_OFFSET):
+        double q_offset=DEFAULT_Q_OFFSET,
+        **kwargs):
     # check that all of the arrays are the same size
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
@@ -289,16 +291,17 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
 
     # run the fitting code
     cdef string out
-    out = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
-                offset, numerical, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
-    log.info(out.decode("utf-8").strip())
+    summary = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
+                    offset, numerical, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
+    log.info(summary)
 
     # return the fitted parameter values
     params = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear,
               'imbalance': imbalance, 'offset': offset}  # independent
+    params.update({"summary": summary})  # metrics
     params.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2], 'xa': pr[3]})  # resonance
     params.update({'a': pow(pd[0], 2)})  # detuning
     params.update({'gain0': pb[0], 'gain1': pb[1], 'gain2': pb[2], 'phase0': pb[3], 'phase1': pb[4]})  # baseline
     params.update({'alpha': pi[0], 'gamma': pi[1]})  # imbalance
-    params.update({'i_offset': po[0], 'q_offset': po[1]})
+    params.update({'i_offset': po[0], 'q_offset': po[1]})  # offset
     return params

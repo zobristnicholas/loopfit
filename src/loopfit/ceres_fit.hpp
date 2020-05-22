@@ -1,7 +1,7 @@
 #include<string>
 #include<complex>
 
-double detuning(const double f, const bool decreasing, const double pr[], const double pd[]);
+// double detuning(const double f, const bool decreasing, const double pr[], const double pd[]);
 
 std::complex<double> resonance(const double f, const bool decreasing, const double pr[], const double pd[]);
 

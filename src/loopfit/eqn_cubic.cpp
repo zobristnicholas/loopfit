@@ -41,8 +41,8 @@ inline int eqn_quadratic(const double *a, double *x, int i, int j) {
     return 0;
 }
 
-inline int eqn_quadratic(const double *a, const double *o, double *x,
-int i, int j) {
+inline int eqn_quadratic(const double *a, const double *o, double *x, int i,
+                         int j) {
     double p = -0.5 * a[1],
     d = sq(p) - a[0];
     if (d >= 0.0) {
