@@ -130,7 +130,7 @@ def detuning(f, *,
              double xa=DEFAULT_XA,
              double a=DEFAULT_A,
              **kwargs):
-    if f0 < 0: f0 = kwargs.get(fm, np.median(f))
+    if f0 < 0: f0 = kwargs.get('fm', np.median(f))
     f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
     # create the parameter blocks
     cdef double pr[4], pd[1]
