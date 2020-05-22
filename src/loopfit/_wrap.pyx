@@ -185,7 +185,7 @@ def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
                          gain1=0.0, gain2=0.0, phase0=0.0, phase1=0.0, fm=1.0)
         # compute the magnitude and phase of the scattering parameter
         magnitude = np.sqrt(i**2 + q**2)
-        phase = np.unwrap(np.angle(i + 1j * q))
+        phase = np.unwrap(np.arctan2(q, i))
         # calculate useful indices
         f_index_end = len(f) - 1  # last frequency index
         f_index_5pc = max(int(len(f) * 0.05), 2)  # end of first 5% of data
@@ -193,9 +193,9 @@ def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
         fm = kwargs.get('fm', np.median(f))  # frequency at the center of the data
         def xm(fx): return (fx - fm) / fm
         # get the magnitude and phase data to fit
-        mag_ends = np.concatenate((magnitude[:f_index_5pc], magnitude[-f_index_5pc:]))
-        phase_ends = np.concatenate((phase[:f_index_5pc], phase[-f_index_5pc:]))
-        freq_ends = xm(np.concatenate((f[:f_index_5pc], f[-f_index_5pc:])))
+        mag_ends = np.concatenate((magnitude[:f_index_5pc], magnitude[-f_index_5pc + 1:]))
+        phase_ends = np.concatenate((phase[:f_index_5pc], phase[-f_index_5pc + 1:]))
+        freq_ends = xm(np.concatenate((f[:f_index_5pc], f[-f_index_5pc + 1:])))
         # calculate the gain polynomials
         gain_poly = np.polyfit(freq_ends, mag_ends, 2)
         phase_poly = np.polyfit(freq_ends, phase_ends, 1)
@@ -224,9 +224,12 @@ def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
 
         params = {'qi': qi_guess, 'qc': qc_guess, 'f0': f0_guess, 'xa': 0.0, 'a': 0 if not nonlinear else 0.0025,
                   'gain0': gain_poly[2], 'gain1': gain_poly[1], 'gain2': gain_poly[0], 'phase0': phase_poly[1],
-                  'phase1': phase_poly[0], 'i_offset': i_offset, 'q_offset': q_offset, 'alpha': alpha, 'gamma': gamma}
+                  'phase1': phase_poly[0], 'i_offset': i_offset, 'q_offset': q_offset, 'alpha': alpha, 'gamma': gamma,
+                  'fm': fm}
         # input kwargs take priority if they are parameters
         params.update({key: value for key, value in kwargs.items() if key in params.keys()})
+        # coerce to float type
+        params = {key: float(value) for key, value in params.items()}
         return params
 
 
