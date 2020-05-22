@@ -1,4 +1,5 @@
 cimport cython
+import logging
 import numpy as np
 cimport numpy as np
 from libc.math cimport pow
@@ -9,6 +10,9 @@ from ._utils import *
 from ._utils cimport *
 from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c, model as model_c, fit as fit_c,
                          calibrate as calibrate_c, detuning as detuning_c)
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 @cython.boundscheck(False)
@@ -287,7 +291,7 @@ def fit(np.ndarray[DTYPE_float64_t, ndim=1] f,
     cdef string out
     out = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
                 offset, numerical, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
-    print(out.decode("utf-8").strip())
+    log.info(out.decode("utf-8").strip())
 
     # return the fitted parameter values
     params = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear,
