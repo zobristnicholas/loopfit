@@ -15,6 +15,8 @@ from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c, model
 @cython.wraparound(False)
 cdef calibrate_vectorized(np.ndarray[DTYPE_float64_t, ndim=1] f, np.ndarray[DTYPE_float64_t, ndim=1] i,
                           np.ndarray[DTYPE_float64_t, ndim=1] q, double fm, double pb[], double pi[], double po[]):
+    if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
+        raise ValueError("All input arrays must have the same size.")
     for ii in range(f.shape[0]):
         calibrate_c(f[ii], i[ii], q[ii], fm, pb, pi, po)
 
