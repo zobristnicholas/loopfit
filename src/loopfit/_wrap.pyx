@@ -38,6 +38,75 @@ def calibrate(f, i=None, q=None, *,
               double i_offset=DEFAULT_I_OFFSET,
               double q_offset=DEFAULT_Q_OFFSET,
               **kwargs):
+    """
+    The transmission baseline and the offset, phase imbalance, and amplitude
+    imbalance of an IQ mixer can be removed from data using this function.
+
+    This function inverts the following equation:
+        z = mixer(baseline(f) * z)
+    where the mixer and baseline functions have their parameters suppressed.
+    See their docstrings for more details.
+
+    Args:
+        f: numpy.ndarray, numpy.float64 or numpy.float32
+            The frequency or frequencies corresponding to the mixer data. Data
+            not in a numpy array will be coerced into that format.
+        i: numpy.ndarray, float (optional)
+            The in-phase component of the mixer's output to be calibrated. q
+            must be supplied if i is supplied. i cannot be used in combination
+            with the z keyword argument.
+        q: numpy.ndarray, float (optional)
+            The quadrature component of the mixer's output to be calibrated. i
+            must be supplied if q is supplied. q cannot be used in combination
+            with the z keyword argument.
+        z: numpy.ndarray, complex (optional)
+            If neither i or q are supplied, then this keyword argument must be.
+            z represents the complex mixer output (i + 1j * q).
+        fm:  float (optional)
+            The reference frequency for the gain and phase parameters of the
+            baseline. See the baseline docstring for more details.
+        gain0: float (optional)
+            The zeroth order gain coefficient. See the baseline docstring for
+            more details.
+        gain1: float (optional)
+            The first order gain coefficient. See the baseline docstring for
+            more details.
+        gain2: float (optional)
+            The second order gain coefficient. See the baseline docstring for
+            more details.
+        phase0: float (optional)
+            The zeroth order phase coefficient. See the baseline docstring for
+            more details.
+        phase1: float (optional)
+            The first order phase coefficient. See the baseline docstring for
+            more details.
+        alpha: float (optional)
+            The mixer amplitude imbalance. See the mixer docstring for more
+            details.
+        gamma: float (optional)
+            The mixer phase imbalance. See the mixer docstring for more
+            details.
+        i_offset: float (optional)
+            The mixer in-phase component offset. See the mixer docstring for
+            more details.
+        q_offset: float (optional)
+            The mixer quadrature component offset. See the mixer docstring for
+            more details.
+        optional keyword arguments:
+            All other keyword arguments are ignored allowing the output of fit
+            to be supplied as a double starred argument.
+
+    Returns:
+        i: numpy.ndarray, numpy.float64
+            The calibrated in-phase mixer component. Only returned if i and q
+            are specified.
+        q: numpy.ndarray, numpy.float64
+            The calibrated quadrature mixer component. Only returned if i and q
+            are specified.
+        z: numpy.ndarray, numpy.complex128
+            The calibrated complex mixer data. Only returned if z is specified.
+
+    """
     # check inputs
     if fm < 0: fm = np.median(f)  # default depends on f
     f = np.asarray(f)  # no copy if already an array
@@ -87,6 +156,7 @@ cdef baseline_vectorized(np.ndarray[float_t, ndim=1] f, double fm, double pb[]):
         result[ii] = baseline_c(f[ii], fm, pb)
     return result
 
+
 def baseline(f, *,
              double fm=DEFAULT_FM,
              double gain0=DEFAULT_GAIN0,
@@ -95,6 +165,38 @@ def baseline(f, *,
              double phase0=DEFAULT_PHASE0,
              double phase1=DEFAULT_PHASE1,
              **kwargs):
+    """
+    This function models the baseline transmission approximated by the
+    quadratic gain and linear phase frequency polynomials:
+        (gain0 + gain1 * xm + gain2 * xm**2) * exp(1j * (phase0 + phase1 * xm))
+    where xm = (f - fm) / fm.
+
+    Args:
+        f: numpy.ndarray, numpy.float64 or numpy.float32
+            The frequency or frequencies at which to evaluate the function.
+            Data not in a numpy array will be coerced into that format.
+        fm:  float (optional)
+            The reference frequency for the gain and phase parameters of the
+            baseline.
+        gain0: float (optional)
+            The zeroth order gain coefficient.
+        gain1: float (optional)
+            The first order gain coefficient.
+        gain2: float (optional)
+            The second order gain coefficient.
+        phase0: float (optional)
+            The zeroth order phase coefficient.
+        phase1: float (optional)
+            The first order phase coefficient.
+        optional keyword arguments:
+            All other keyword arguments are ignored allowing the output of fit
+            to be supplied as a double starred argument.
+
+    Returns:
+        z: numpy.ndarray, numpy.complex128
+            The complex baseline transmission.
+
+    """
     if fm < 0: fm = np.median(f)  # default depends on f
     f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
@@ -105,13 +207,13 @@ def baseline(f, *,
     cdef np.ndarray[float64_t, ndim=1] f_ravel64
     if f.dtype == np.float64:
         f_ravel64 = f.ravel()
-        result = baseline_vectorized(f_ravel64, fm, &pb[0])
+        z = baseline_vectorized(f_ravel64, fm, &pb[0])
     elif f.dtype == np.float32:
         f_ravel32 = f.ravel()
-        result = baseline_vectorized(f_ravel32, fm, &pb[0])
+        z = baseline_vectorized(f_ravel32, fm, &pb[0])
     else:
         raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
-    return result.reshape(f.shape)
+    return z.reshape(f.shape)
 
 
 @cython.boundscheck(False)
