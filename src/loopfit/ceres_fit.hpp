@@ -66,14 +66,18 @@ std::complex<double> baseline(const T f, const double fm, const double pb[]) {
 
 // define the mixer nonlinearity
 template <class T>
-std::complex<double> mixer(std::complex<T> z, const double pi[], const double po[]) {
+std::complex<double> mixer(const std::complex<T> z, const double pi[], const double po[]) {
+    std::complex<double> result;
     if (pi[alpha] != 1.0 || pi[gamma_] != 0.0) {
-        z = (z.real() * pi[alpha] + J * (z.real() * sin(pi[gamma_]) + z.imag() * cos(pi[gamma_])));
+        result = (z.real() * pi[alpha] + J * (z.real() * sin(pi[gamma_]) + z.imag() * cos(pi[gamma_])));
+    }
+    else {
+        result = z;
     };
     if (po[i_offset] != 0.0 || po[q_offset] != 0.0) {
-        z += po[i_offset] + J * po[q_offset];
+        result += po[i_offset] + J * po[q_offset];
     };
-    return z;
+    return result;
 };
 
 

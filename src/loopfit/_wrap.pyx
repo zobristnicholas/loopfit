@@ -9,7 +9,7 @@ from libcpp cimport bool as bool_t
 from ._utils import *
 from ._utils cimport *
 from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c, model as model_c, fit as fit_c,
-                         calibrate as calibrate_c, detuning as detuning_c)
+                         calibrate as calibrate_c, detuning as detuning_c, mixer as mixer_c)
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -64,13 +64,10 @@ def calibrate(f, i=None, q=None, *,
     cdef np.ndarray[float64_t, ndim=1] f_ravel64
     if f.dtype == np.float64:
         f_ravel64 = f.ravel()
-        f_type = '64'
     elif f.dtype == np.float32:
         f_ravel32 = f.ravel()
-        f_type = '32'
     else:
         raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
-
     # calibrate the data
     if f.dtype == np.float64:
         calibrate_vectorized(f_ravel64, i_ravel, q_ravel, fm, pb, pi, po)
@@ -188,6 +185,49 @@ def detuning(f, *,
     else:
         raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
     return result.reshape(f.shape)
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef mixer_vectorized(np.ndarray[complex128_t, ndim=1] z, double pi[], double po[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(z.shape[0], dtype=np.complex128)
+    for ii in range(z.shape[0]):
+        result[ii] = mixer_c(z[ii], pi, po)
+    return result
+
+
+def mixer(i=None, q=None, *,
+          z=None,
+          double alpha=DEFAULT_ALPHA,
+          double gamma=DEFAULT_GAMMA,
+          double i_offset=DEFAULT_I_OFFSET,
+          double q_offset=DEFAULT_Q_OFFSET,
+          **kwargs):
+    # create the parameter blocks
+    cdef double pi[2], po[2]
+    create_imbalance_block(pi, alpha, gamma)
+    create_offset_block(po, i_offset, q_offset)
+    # initialize output i & q arrays
+    if (i is not None) and (q is not None):
+        i = np.asarray(i)
+        q = np.asarray(q)
+        if i.shape != q.shape or np.iscomplex(i).any() or np.iscomplex(q).any():
+            raise ValueError("i and q must have the same shape and be real.")
+        z = i + 1j * q  # automatically creates np.complex128 type
+        z_output = False
+    elif z is not None:
+        z = np.asarray(z, dtype=np.complex128)
+        z_output = True
+    else:
+        raise ValueError("Neither i and q or z were supplied as keyword arguments.")
+    # call function
+    cdef np.ndarray[complex128_t, ndim=1] z_ravel = z.ravel()
+    result = mixer_vectorized(z_ravel, pi, po)
+    result = result.reshape(z.shape)
+    if z_output:
+        return result
+    else:
+        return result.real, result.imag
 
 
 @cython.boundscheck(False)

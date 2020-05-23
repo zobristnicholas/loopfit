@@ -8,6 +8,8 @@ cdef extern from "ceres_fit.hpp":
 
     double complex baseline[T](const T, const double, const double*)
 
+    double complex mixer(const double complex, const double*, const double*)
+
     double complex model[T](const T, const double, const bool_t, const double*, const double*, const double*,
                             const double*, const double*)
 
