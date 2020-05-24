@@ -34,9 +34,9 @@ def calibrate(f, i=None, q=None, *,
               double phase0=DEFAULT_PHASE0,
               double phase1=DEFAULT_PHASE1,
               double alpha=DEFAULT_ALPHA,
+              double beta=DEFAULT_BETA,
               double gamma=DEFAULT_GAMMA,
-              double i_offset=DEFAULT_I_OFFSET,
-              double q_offset=DEFAULT_Q_OFFSET,
+              double delta=DEFAULT_DELTA,
               **kwargs):
     """
     The transmission baseline and the offset, phase imbalance, and amplitude
@@ -83,13 +83,13 @@ def calibrate(f, i=None, q=None, *,
         alpha: float (optional)
             The mixer amplitude imbalance. See the mixer docstring for more
             details.
-        gamma: float (optional)
+        beta: float (optional)
             The mixer phase imbalance. See the mixer docstring for more
             details.
-        i_offset: float (optional)
+        gamma: float (optional)
             The mixer in-phase component offset. See the mixer docstring for
             more details.
-        q_offset: float (optional)
+        delta: float (optional)
             The mixer quadrature component offset. See the mixer docstring for
             more details.
         optional keyword arguments:
@@ -113,8 +113,8 @@ def calibrate(f, i=None, q=None, *,
     # create the parameter blocks
     cdef double pb[5], pi[2], po[2]
     create_baseline_block(pb, gain0, gain1, gain2, phase0, phase1)
-    create_imbalance_block(pi, alpha, gamma)
-    create_offset_block(po, i_offset, q_offset)
+    create_imbalance_block(pi, alpha, beta)
+    create_offset_block(po, gamma, delta)
     # initialize output i & q arrays (copy since calibrate_c is in-place)
     if (i is not None) and (q is not None):
         i = np.array(i, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
@@ -233,6 +233,30 @@ def resonance(f, *,
               double xa=DEFAULT_XA,
               double a=DEFAULT_A,
               **kwargs):
+    """
+    This function models the resonator transmission given by the asymmetric
+    hanger equation:
+        (qc + 2j * qi * qc * (x + xa)) / (qi + qc + 2j * qi * qc * x)
+    where x is given by the detuning function. See its docstring for more
+    details.
+
+    Args:
+        f: numpy.ndarray, numpy.float64 or numpy.float32
+            The frequency or frequencies at which to evaluate the function.
+            Data not in a numpy array will be coerced into that format.
+        decreasing: bool
+        qi: float
+        qc: float
+        f0: float
+        xa: float
+        a: float
+        optional keyword arguments:
+            All other keyword arguments are ignored allowing the output of fit
+            to be supplied as a double starred argument.
+
+    Returns:
+
+    """
     f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
     cdef double pr[4], pd[1]
@@ -301,14 +325,14 @@ cdef mixer_vectorized(np.ndarray[complex128_t, ndim=1] z, double pi[], double po
 def mixer(i=None, q=None, *,
           z=None,
           double alpha=DEFAULT_ALPHA,
+          double beta=DEFAULT_BETA,
           double gamma=DEFAULT_GAMMA,
-          double i_offset=DEFAULT_I_OFFSET,
-          double q_offset=DEFAULT_Q_OFFSET,
+          double delta=DEFAULT_DELTA,
           **kwargs):
     # create the parameter blocks
     cdef double pi[2], po[2]
-    create_imbalance_block(pi, alpha, gamma)
-    create_offset_block(po, i_offset, q_offset)
+    create_imbalance_block(pi, alpha, beta)
+    create_offset_block(po, gamma, delta)
     # initialize output i & q arrays
     if (i is not None) and (q is not None):
         i = np.asarray(i)
@@ -356,9 +380,9 @@ def model(f, *,
           double phase0=DEFAULT_PHASE0,
           double phase1=DEFAULT_PHASE1,
           double alpha=DEFAULT_ALPHA,
+          double beta=DEFAULT_BETA,
           double gamma=DEFAULT_GAMMA,
-          double i_offset=DEFAULT_I_OFFSET,
-          double q_offset=DEFAULT_Q_OFFSET,
+          double delta=DEFAULT_DELTA,
           **kwargs):
     # check inputs
     if fm < 0: fm = np.median(f)  # default depends on f
@@ -367,7 +391,7 @@ def model(f, *,
     # create the parameter blocks
     cdef double pr[4], pd[1], pb[5], pi[2], po[2]
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
-                            phase1, alpha, gamma, i_offset, q_offset)
+                            phase1, alpha, beta, gamma, delta)
     # call function
     cdef np.ndarray[float32_t, ndim=1] f_ravel32
     cdef np.ndarray[float64_t, ndim=1] f_ravel64
@@ -384,9 +408,9 @@ def model(f, *,
 
 def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
         # estimate mixer correction from calibration data
-        alpha, gamma, i_offset, q_offset = compute_mixer_calibration(offset, imbalance, **kwargs)
+        alpha, beta, gamma, delta = compute_mixer_calibration(offset, imbalance, **kwargs)
         # remove the IQ mixer offset and imbalance
-        i, q = calibrate(f, i, q, alpha=alpha, gamma=gamma, i_offset=i_offset, q_offset=q_offset, gain0=1.0,
+        i, q = calibrate(f, i, q, alpha=alpha, beta=beta, gamma=gamma, delta=delta, gain0=1.0,
                          gain1=0.0, gain2=0.0, phase0=0.0, phase1=0.0, fm=1.0)
         # compute the magnitude and phase of the scattering parameter
         magnitude = np.sqrt(i**2 + q**2)
@@ -429,7 +453,7 @@ def guess(f, i, q, *, nonlinear=False, imbalance=None, offset=None, **kwargs):
 
         params = {'qi': qi_guess, 'qc': qc_guess, 'f0': f0_guess, 'xa': 0.0, 'a': 0 if not nonlinear else 0.0025,
                   'gain0': gain_poly[2], 'gain1': gain_poly[1], 'gain2': gain_poly[0], 'phase0': phase_poly[1],
-                  'phase1': phase_poly[0], 'i_offset': i_offset, 'q_offset': q_offset, 'alpha': alpha, 'gamma': gamma,
+                  'phase1': phase_poly[0], 'gamma': gamma, 'delta': delta, 'alpha': alpha, 'beta': beta,
                   'fm': fm}
         # input kwargs take priority if they are parameters
         params.update({key: value for key, value in kwargs.items() if key in params.keys()})
@@ -461,9 +485,9 @@ def fit(np.ndarray[float_t, ndim=1] f,
         double phase0=DEFAULT_PHASE0,
         double phase1=DEFAULT_PHASE1,
         double alpha=DEFAULT_ALPHA,
+        double beta=DEFAULT_BETA,
         double gamma=DEFAULT_GAMMA,
-        double i_offset=DEFAULT_I_OFFSET,
-        double q_offset=DEFAULT_Q_OFFSET,
+        double delta=DEFAULT_DELTA,
         **kwargs):
     # check that all of the arrays are the same size
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
@@ -487,7 +511,7 @@ def fit(np.ndarray[float_t, ndim=1] f,
     # create the parameter blocks
     cdef double pr[4], pd[1], pb[5], pi[2], po[2]
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
-                            phase1, alpha, gamma, i_offset, q_offset)
+                            phase1, alpha, beta, gamma, delta)
 
     # run the fitting code
     cdef string out
@@ -502,6 +526,6 @@ def fit(np.ndarray[float_t, ndim=1] f,
     params.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2], 'xa': pr[3]})  # resonance
     params.update({'a': pow(pd[0], 2)})  # detuning
     params.update({'gain0': pb[0], 'gain1': pb[1], 'gain2': pb[2], 'phase0': pb[3], 'phase1': pb[4]})  # baseline
-    params.update({'alpha': pi[0], 'gamma': pi[1]})  # imbalance
-    params.update({'i_offset': po[0], 'q_offset': po[1]})  # offset
+    params.update({'alpha': pi[0], 'beta': pi[1]})  # imbalance
+    params.update({'gamma': po[0], 'delta': po[1]})  # offset
     return params

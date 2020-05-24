@@ -1,6 +1,6 @@
-#include<string>
-#include <math.h>
-#include <complex.h>
+#include <string>
+#include <cmath>
+#include <complex>
 #include <algorithm>    // std::min_element, std::max_element
 #include "eqn_cubic.hpp"
 #include "ceres/ceres.h"
@@ -17,9 +17,9 @@ const unsigned int gain2 = 2;
 const unsigned int phase0 = 3;
 const unsigned int phase1 = 4;
 const unsigned int alpha = 0; // pi
-const unsigned int gamma_ = 1;
-const unsigned int i_offset = 0; // po
-const unsigned int q_offset = 1;
+const unsigned int beta = 1;
+const unsigned int gamma_ = 0; // po
+const unsigned int delta = 1;
 
 // other useful constants
 const std::complex<double> J (0.0, 1.0);
@@ -60,7 +60,7 @@ std::complex<double> resonance(const T f, const bool decreasing, const double pr
 template <class T>
 std::complex<double> baseline(const T f, const double fm, const double pb[]) {
     const double xm = (f - fm) / fm;
-    return (pb[gain0] + pb[gain1] * xm + pb[gain2] * pow(xm, 2.0)) * exp(J * (pb[phase0] + pb[phase1] * xm));
+    return (pb[gain0] + pb[gain1] * xm + pb[gain2] * pow(xm, 2.0)) * std::exp(J * (pb[phase0] + pb[phase1] * xm));
 };
 
 
@@ -68,14 +68,14 @@ std::complex<double> baseline(const T f, const double fm, const double pb[]) {
 template <class T>
 std::complex<double> mixer(const std::complex<T> z, const double pi[], const double po[]) {
     std::complex<double> result;
-    if (pi[alpha] != 1.0 || pi[gamma_] != 0.0) {
-        result = (z.real() * pi[alpha] + J * (z.real() * sin(pi[gamma_]) + z.imag() * cos(pi[gamma_])));
+    if (pi[alpha] != 1.0 || pi[beta] != 0.0) {
+        result = z.real() + J * pi[alpha] * (z.real() * std::sin(pi[beta]) + z.imag() * std::cos(pi[beta]));
     }
     else {
         result = z;
     };
-    if (po[i_offset] != 0.0 || po[q_offset] != 0.0) {
-        result += po[i_offset] + J * po[q_offset];
+    if (po[gamma_] != 0.0 || po[delta] != 0.0) {
+        result += po[gamma_] + J * po[delta];
     };
     return result;
 };
@@ -93,11 +93,11 @@ std::complex<double> model(const T f, const double fm, const bool decreasing, co
 template <class T, class U>
 void calibrate(const T f, U& i, U& q, const double fm, const double pb[], const double pi[], const double po[]) {
     std::complex<double> z = i + J * q;
-    if (po[i_offset] != 0.0 || po[q_offset] != 0.0) {  // remove offset
-        z -= (po[i_offset] + J * po[q_offset]);
+    if (po[gamma_] != 0.0 || po[delta] != 0.0) {  // remove offset
+        z -= (po[gamma_] + J * po[delta]);
     };
-    if (pi[alpha] != 1.0 || pi[gamma_] != 0.0) {  // remove imbalance
-        z = (z.real() / pi[alpha] + J * (-z.real() * tan(pi[gamma_]) / pi[alpha] + z.imag() / cos(pi[gamma_])));
+    if (pi[alpha] != 1.0 || pi[beta] != 0.0) {  // remove imbalance
+        z = (z.real() + J * (-z.real() * std::tan(pi[beta]) + z.imag() / std::cos(pi[beta]) / pi[alpha]));
     };
     z /= baseline(f, fm, pb);
     i = z.real();
@@ -148,16 +148,16 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
             // compute residual
             residuals[0] = z.real() - i_;  // real part
             residuals[1] = z.imag() - q_;  // imaginary part
-            // compute jacobian
+            // compute Jacobian
             if (jacobians != NULL) {
                 // expressions needed for most blocks
                 const double x = detuning(f_, decreasing_, pr, pd);
-                const std::complex<double> a_i_sin_g = pi[alpha] + J * sin(pi[gamma_]);
-                const std::complex<double> t1 = 2.0 * bl * pr[qc] * pr[qi] * a_i_sin_g;
+                const std::complex<double> t1 = 2.0 * bl * pr[qc] * pr[qi];
                 const std::complex<double> qc2_xa_i = (2.0 * pr[qc] * pr[xa] + J);
                 const std::complex<double> t2 = -pr[qi] * t1 * qc2_xa_i;
                 const std::complex<double> denom = 2.0 * pr[qc] * pr[qi] * x - J * (pr[qc] + pr[qi]);
                 const std::complex<double> denom_sq = pow(denom, 2.0);
+                const double dpo[2] = {0.0, 0.0};
                 // compute detuning derivatives
                 double dxdqi;
                 double dxdqc;
@@ -182,29 +182,35 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
                     dxda_sqrt = 0.0;
                 };
                 if (jacobians[0] != NULL) {  // pr
-                    std::complex<double> j_qi = (-J * bl * pr[qc] * qc2_xa_i * a_i_sin_g + t2 * dxdqi) / denom_sq;
+                    const std::complex<double> dzdqi = (-J * bl * pr[qc] * qc2_xa_i + t2 * dxdqi) / denom_sq;
+                    const std::complex<double> j_qi = mixer(dzdqi, pi, dpo);
                     // [parameter block][residual index * parameter block size + parameter index]
                     jacobians[0][0 * 4 + qi] = j_qi.real();
                     jacobians[0][1 * 4 + qi] = j_qi.imag();
-                    const std::complex<double> j_qc = (-bl * pr[qi] * J * a_i_sin_g *
-                                                       (2.0 * pr[qi] * (x + pr[xa]) - J) + t2 * dxdqc) / denom_sq;
+                    const std::complex<double> dzdqc = (-J * bl * pr[qi] * (2.0 * pr[qi] * (x + pr[xa]) - J) +
+                                                        t2 * dxdqc) / denom_sq;
+                    const std::complex<double> j_qc = mixer(dzdqc, pi, dpo);
                     jacobians[0][0 * 4 + qc] = j_qc.real();
                     jacobians[0][1 * 4 + qc] = j_qc.imag();
-                    const std::complex<double> j_f0 = t2 / denom_sq * dxdf0;
+                    const std::complex<double> dzdf0 = t2 / denom_sq * dxdf0;
+                    const std::complex<double> j_f0 = mixer(dzdf0, pi, dpo);
                     jacobians[0][0 * 4 + f0] = j_f0.real();
                     jacobians[0][1 * 4 + f0] = j_f0.imag();
-                    const std::complex<double> j_xa = t1 / denom;
+                    const std::complex<double> dzdxa = t1 / denom;
+                    const std::complex<double> j_xa = mixer(dzdxa, pi, dpo);
                     jacobians[0][0 * 4 + xa] = j_xa.real();
                     jacobians[0][1 * 4 + xa] = j_xa.imag();
                 };
                 if (jacobians[1] != NULL) {  // pd
-                    const std::complex<double> j_a_sqrt = t2 * dxda_sqrt / denom_sq;
+                    const std::complex<double> dzdasqrt = t2 * dxda_sqrt / denom_sq;
+                    const std::complex<double> j_a_sqrt = mixer(dzdasqrt, pi, dpo);
                     jacobians[1][0 * 1 + a_sqrt] = j_a_sqrt.real();
                     jacobians[1][1 * 1 + a_sqrt] = j_a_sqrt.imag();
                 };
                 if (jacobians[2] != NULL) {  // pb
                     const std::complex<double> xm = (f_ - fm_) / fm_;
-                    const std::complex<double> j_gain0 = res * a_i_sin_g * exp(J * (pb[phase0] + pb[phase1] * xm));
+                    const std::complex<double> dzdgain0 = res * std::exp(J * (pb[phase0] + pb[phase1] * xm));
+                    const std::complex<double> j_gain0 = mixer(dzdgain0, pi, dpo);
                     jacobians[2][0 * 5 + gain0] = j_gain0.real();
                     jacobians[2][1 * 5 + gain0] = j_gain0.imag();
                     const std::complex<double> j_gain1 = xm * j_gain0;
@@ -213,8 +219,9 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
                     const std::complex<double> j_gain2 = xm * j_gain1;
                     jacobians[2][0 * 5 + gain2] = j_gain2.real();
                     jacobians[2][1 * 5 + gain2] = j_gain2.imag();
-                    const std::complex<double> j_phase0 = J * j_gain0 * (pb[gain0] + pb[gain1] * xm +
-                                                                         pb[gain2] * pow(xm, 2.0));
+                    const std::complex<double> dzdphase0 = J * dzdgain0 * (pb[gain0] + pb[gain1] * xm +
+                                                                           pb[gain2] * pow(xm, 2.0));
+                    const std::complex<double> j_phase0 = mixer(dzdphase0, pi, dpo);
                     jacobians[2][0 * 5 + phase0] = j_phase0.real();
                     jacobians[2][1 * 5 + phase0] = j_phase0.imag();
                     const std::complex<double> j_phase1 = xm * j_phase0;
@@ -222,19 +229,17 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
                     jacobians[2][1 * 5 + phase1] = j_phase1.imag();
                 };
                 if (jacobians[3] != NULL) {  // pi
-                    const std::complex<double> bl_res_exp = bl_res * exp(J * pi[gamma_]);
-                    const std::complex<double> j_alpha = (conj(bl_res) + bl_res) / 2.0;
-                    jacobians[3][0 * 2 + alpha] = j_alpha.real();
-                    jacobians[3][1 * 2 + alpha] = j_alpha.imag();
-                    const std::complex<double> j_gamma = J * bl_res_exp.real();
-                    jacobians[3][0 * 2 + gamma_] = j_gamma.real();
-                    jacobians[3][1 * 2 + gamma_] = j_gamma.imag();
+                    const std::complex<double> bl_res_exp = bl_res * std::exp(J * pi[beta]);
+                    jacobians[3][0 * 2 + alpha] = 0.0;
+                    jacobians[3][1 * 2 + alpha] = bl_res_exp.imag();
+                    jacobians[3][0 * 2 + beta] = 0.0;
+                    jacobians[3][1 * 2 + beta] = pi[alpha] * bl_res_exp.real();
                 };
                 if (jacobians[4] != NULL) {  // po
-                    jacobians[4][0 * 2 + i_offset] = 1.0;
-                    jacobians[4][1 * 2 + i_offset] = 0.0;
-                    jacobians[4][0 * 2 + q_offset] = 0.0;
-                    jacobians[4][1 * 2 + q_offset] = 1.0;
+                    jacobians[4][0 * 2 + gamma_] = 1.0;
+                    jacobians[4][1 * 2 + gamma_] = 0.0;
+                    jacobians[4][0 * 2 + delta] = 0.0;
+                    jacobians[4][1 * 2 + delta] = 1.0;
                 };
                 return true;
             };
@@ -274,8 +279,9 @@ std::string fit(const T f[], const U i[], const U q[], const unsigned int data_s
     problem.SetParameterLowerBound(pr, f0, *std::min_element(f, f + data_size));
     problem.SetParameterUpperBound(pr, f0, *std::max_element(f, f + data_size));
     problem.SetParameterLowerBound(pb, gain0, 0.0);
-    problem.SetParameterLowerBound(pi, gamma_, pi[gamma_] - PI / 2.0);
-    problem.SetParameterUpperBound(pi, gamma_, pi[gamma_] + PI / 2.0);
+    problem.SetParameterLowerBound(pi, alpha, 0.0);
+    problem.SetParameterLowerBound(pi, beta, pi[beta] - PI / 2.0);
+    problem.SetParameterUpperBound(pi, beta, pi[beta] + PI / 2.0);
     // fix some parameters to be constants
     if (!baseline) {  // don't fit baseline
         problem.SetParameterBlockConstant(pb);

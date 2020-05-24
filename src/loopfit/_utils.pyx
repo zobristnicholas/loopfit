@@ -13,9 +13,9 @@ cdef double DEFAULT_GAIN2 = 0.0
 cdef double DEFAULT_PHASE0 = 0.0
 cdef double DEFAULT_PHASE1 = 0.0
 cdef double DEFAULT_ALPHA = 1.0
+cdef double DEFAULT_BETA = 0.0
 cdef double DEFAULT_GAMMA = 0.0
-cdef double DEFAULT_I_OFFSET = 0.0
-cdef double DEFAULT_Q_OFFSET = 0.0
+cdef double DEFAULT_DELTA = 0.0
 
 # independent variable defaults
 cdef double DEFAULT_FM = -1.0  # negative means derive from f
@@ -35,32 +35,32 @@ def bandpass(data):
 def compute_mixer_calibration(offset, imbalance, **kwargs):
     if offset is not None:
         z_offset = np.mean(offset)
-        i_offset = z_offset.real if 'i_offset' not in kwargs.keys() else kwargs['i_offset']
-        q_offset = z_offset.imag if 'q_offset' not in kwargs.keys() else kwargs['q_offset']
+        gamma = z_offset.real if 'gamma' not in kwargs.keys() else kwargs['gamma']
+        delta = z_offset.imag if 'delta' not in kwargs.keys() else kwargs['delta']
     else:
-        i_offset = kwargs.get('i_offset', DEFAULT_I_OFFSET)
-        q_offset = kwargs.get('q_offset', DEFAULT_Q_OFFSET)
+        gamma = kwargs.get('gamma', DEFAULT_GAMMA)
+        delta = kwargs.get('delta', DEFAULT_DELTA)
     if imbalance is not None:
         imbalance = np.atleast_2d(imbalance)
         # bandpass filter the I and Q signals
         n = imbalance.shape[0]
         ip, f_i_ind = bandpass(imbalance.real)
         qp, f_q_ind = bandpass(imbalance.imag)
-        # compute alpha and gamma
-        amp = np.sqrt(2 * np.mean(qp**2, axis=-1))
+        # compute alpha and beta
+        amp = np.sqrt(2 * np.mean(ip**2, axis=-1))
         if 'alpha' not in kwargs.keys():
-            alpha = np.sqrt(2 * np.mean(ip**2, axis=-1)) / amp
+            alpha = np.sqrt(2 * np.mean(qp**2, axis=-1)) / amp
             alpha = np.mean(alpha)
         else:
             alpha = kwargs['alpha']
-        if 'gamma' not in kwargs.keys():
+        if 'beta' not in kwargs.keys():
             ratio = np.angle(np.fft.rfft(ip)[np.arange(n), f_i_ind[:, 0]] /
                              np.fft.rfft(qp)[np.arange(n), f_q_ind[:, 0]])  # for arcsine branch
-            gamma = np.arcsin(np.sign(ratio) * 2 * np.mean(qp * ip, axis=-1) / (alpha * amp**2)) + np.pi * (ratio < 0)
-            gamma = np.mean(gamma)
+            beta = np.arcsin(np.sign(ratio) * 2 * np.mean(qp * ip, axis=-1) / (alpha * amp**2)) + np.pi * (ratio < 0)
+            beta = np.mean(beta)
         else:
-            gamma = kwargs['gamma']
+            beta = kwargs['beta']
     else:
         alpha = kwargs.get('alpha', DEFAULT_ALPHA)
-        gamma = kwargs.get('gamma', DEFAULT_GAMMA)
-    return alpha, gamma, i_offset, q_offset
+        beta = kwargs.get('beta', DEFAULT_BETA)
+    return alpha, beta, gamma, delta

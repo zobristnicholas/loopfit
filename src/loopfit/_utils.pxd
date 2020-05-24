@@ -17,9 +17,9 @@ cdef double DEFAULT_GAIN2
 cdef double DEFAULT_PHASE0
 cdef double DEFAULT_PHASE1
 cdef double DEFAULT_ALPHA
+cdef double DEFAULT_BETA
 cdef double DEFAULT_GAMMA
-cdef double DEFAULT_I_OFFSET
-cdef double DEFAULT_Q_OFFSET
+cdef double DEFAULT_DELTA
 
 # independent variable defaults
 cdef double DEFAULT_FM
@@ -53,20 +53,20 @@ cdef inline create_baseline_block(double pb[5], double gain0, double gain1, doub
     pb[:] = [gain0, gain1, gain2, phase0, phase1]
 
 
-cdef inline create_imbalance_block(double pi[2], double alpha, double gamma):
-    pi[:] = [alpha, gamma]
+cdef inline create_imbalance_block(double pi[2], double alpha, double beta):
+    pi[:] = [alpha, beta]
 
 
-cdef inline create_offset_block(double po[2], double i_offset, double q_offset):
-    po[:] = [i_offset, q_offset]
+cdef inline create_offset_block(double po[2], double gamma, double delta):
+    po[:] = [gamma, delta]
 
 
 cdef inline create_parameter_blocks(double pr[4], double pd[1], double pb[5], double pi[2], double po[2], double qi,
                                     double qc, double f0, double xa, double a, double gain0, double gain1, double gain2,
-                                    double phase0, double phase1, double alpha, double gamma, double i_offset,
-                                    double q_offset):
+                                    double phase0, double phase1, double alpha, double beta, double gamma,
+                                    double delta):
     create_resonance_block(pr, qi, qc, f0, xa)
     create_detuning_block(pd, a)
     create_baseline_block(pb, gain0, gain1, gain2, phase0, phase1)
-    create_imbalance_block(pi, alpha, gamma)
-    create_offset_block(po, i_offset, q_offset)
+    create_imbalance_block(pi, alpha, beta)
+    create_offset_block(po, gamma, delta)
