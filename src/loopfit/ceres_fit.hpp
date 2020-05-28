@@ -126,7 +126,7 @@ struct Residual {
 };
 
 
-// construct the cost function which evaluates the residual and analytic jacobian at each iteration
+// construct the cost function which evaluates the residual and analytic Jacobian at each iteration
 template<class T, class U>
 class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
     public:
@@ -255,8 +255,8 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
 template<class T, class U>
 std::string fit(const T f[], const U i[], const U q[], const unsigned int data_size, const double fm,
                 const bool decreasing, const bool baseline, const bool nonlinear, const bool imbalance,
-                const bool offset, const bool numerical, double pr[], double pd[], double pb[], double pi[],
-                double po[]) {
+                const bool offset, const bool numerical, const int max_iterations, int& threads, int& varied,
+                bool& success, double pr[], double pd[], double pb[], double pi[], double po[]) {
     // set up the residual
     ceres::Problem problem;
     for (int ii = 0; ii < data_size; ++ii) {
@@ -297,12 +297,16 @@ std::string fit(const T f[], const U i[], const U q[], const unsigned int data_s
     };
     // set up solver
     ceres::Solver::Options options;
-    options.max_num_iterations = 100;
+    options.num_threads = threads;
+    options.max_num_iterations = max_iterations;
     options.linear_solver_type = ceres::DENSE_QR;
     options.minimizer_progress_to_stdout = false;
     ceres::Solver::Summary summary;
     // solve and return output
     ceres::Solve(options, &problem, &summary);
+    threads = summary.num_threads_used;
+    varied = summary.num_effective_parameters_reduced;
+    success = (summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS);
     const std::string output = summary.FullReport() + std::string("\n");
     return output;
 };
