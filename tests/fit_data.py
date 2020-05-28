@@ -13,7 +13,7 @@ loop += np.random.normal(0, 0.02, loop.shape) + 1j * np.random.normal(0, 0.02, l
 nonlinear = True
 init_params = loopfit.guess(f, loop.real, loop.imag, nonlinear=nonlinear, alpha=1.1, beta=0.05)
 result = loopfit.fit(f, loop.real, loop.imag, baseline=True, nonlinear=nonlinear, imbalance=True, numerical=False,
-                     **init_params)
+                     max_iterations=100, threads=2, **init_params)
 
 print(result['summary'])
 
