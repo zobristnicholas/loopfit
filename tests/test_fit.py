@@ -1,4 +1,3 @@
-import pytest
 import loopfit as lf
 import numpy as np
 from numpy.testing import assert_allclose
@@ -7,6 +6,7 @@ KEYS = ['qi', 'qc', 'xa', 'a', 'f0']
 
 
 def test_fit(f, model, parameters, random):
+    """Test that the fit works for different parameters."""
     a = parameters.get('a', 0.0)
     alpha = parameters.get('alpha', 1.0)
     beta = parameters.get('beta', 0.0)
