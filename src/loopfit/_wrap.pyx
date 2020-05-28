@@ -5,6 +5,7 @@ cimport numpy as np
 from libc.math cimport pow
 from libcpp.string cimport string
 from libcpp cimport bool as bool_t
+from scipy.ndimage import label, find_objects
 
 from ._utils import *
 from ._utils cimport *
@@ -707,7 +708,10 @@ def guess(f, i=None, q=None, *,
     mag_min = magnitude[f_index_min]
     fwhm = np.sqrt((mag_max**2 + mag_min**2) / 2.)  # fwhm is for power not amplitude
     fwhm_mask = magnitude < fwhm
-    bandwidth = np.abs(f[fwhm_mask][-1] - f[fwhm_mask][0])
+    regions, _ = label(fwhm_mask)  # find the regions where magnitude < fwhm
+    region = regions[f_index_min]  # pick the one that includes the minimum
+    f_masked = f[find_objects(regions, max_label=region)[-1]]  # mask f to only include that region
+    bandwidth = f_masked.max() - f_masked.min()  # find the bandwidth
     # Q0 = f0 / fwhm bandwidth
     q0_guess = f0_guess / bandwidth if bandwidth != 0 else 1e4
     # Q0 / Qi = min(mag) / max(mag)
