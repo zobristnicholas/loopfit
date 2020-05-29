@@ -91,7 +91,8 @@ std::complex<double> model(const T f, const double fm, const bool decreasing, co
 
 // define a calibration function for external use
 template <class T, class U>
-void calibrate(const T f, U& i, U& q, const double fm, const double pb[], const double pi[], const double po[]) {
+void calibrate(const T f, U& i, U& q, const bool center, const double fm, const double pr[], const double pb[],
+               const double pi[], const double po[]) {
     std::complex<double> z = i + J * q;
     if (po[gamma_] != 0.0 || po[delta] != 0.0) {  // remove offset
         z -= (po[gamma_] + J * po[delta]);
@@ -100,6 +101,10 @@ void calibrate(const T f, U& i, U& q, const double fm, const double pb[], const 
         z = (z.real() + J * (-z.real() * std::tan(pi[beta]) + z.imag() / std::cos(pi[beta]) / pi[alpha]));
     };
     z /= baseline(f, fm, pb);
+    if (center) {
+        const double q0 = 1.0 / (1.0 / pr[qc] + 1.0 / pr[qi]);
+        z = 1 - q0 / (2 * pr[qc]) + J * q0 * pr[xa] - z;
+    };
     i = z.real();
     q = z.imag();
 };

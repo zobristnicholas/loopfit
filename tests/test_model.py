@@ -1,4 +1,5 @@
 import loopfit as lf
+import numpy as np
 from numpy.testing import assert_allclose
 
 
@@ -25,3 +26,10 @@ def test_calibrate_z(f, model, resonance, parameters):
     """Test that calibrate(model) = resonance (z interface)."""
     # rtol raised to accommodate differences between 32 and 64 bit floats
     assert_allclose(resonance, lf.calibrate(f, z=model, **parameters), rtol=1e-5)
+
+
+def test_calibrate_center(f, model, parameters):
+    """Test if the calibration properly centers the data."""
+    radius = np.abs(lf.calibrate(f, z=model, center=True, **parameters))
+    # rtol raised to accommodate differences between 32 and 64 bit floats
+    assert_allclose(radius[0], radius, rtol=1e-5)  # may break if Qi nonlinearity ever is implemented
