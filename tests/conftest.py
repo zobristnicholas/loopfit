@@ -38,3 +38,19 @@ def baseline(f, parameters):
 @pytest.fixture
 def resonance(f, parameters):
     return lf.resonance(f, **parameters)
+
+
+@pytest.fixture
+def data(model, random):
+    noise = (random.normal(0, 0.02, model.shape) + 1j * random.normal(0, 0.02, model.shape)).astype(model.dtype)
+    return model + noise
+
+@pytest.fixture
+def guess(f, data, parameters):
+    a = parameters.get('a', 0.0)
+    beta = parameters.get('beta', 0.0)
+    gamma = parameters.get('gamma', 0.0)
+    delta = parameters.get('delta', 0.0)
+    # guess by providing the offset if supplied and picking the branch of beta.
+    return lf.guess(f, z=data, beta=0 if np.abs(beta) < np.pi / 2 else np.pi, gamma=gamma, delta=delta,
+                    nonlinear=True if a else False)
