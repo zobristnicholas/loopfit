@@ -117,16 +117,16 @@ def calibrate(f, i=None, q=None, *,
     create_imbalance_block(pi, alpha, beta)
     create_offset_block(po, gamma, delta)
     # initialize output i & q arrays (copy since calibrate_c is in-place)
-    if (i is not None) and (q is not None):
+    if (i is not None) and (q is not None) and (z is None):
         i = np.array(i, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
         q = np.array(q, dtype=np.float64, copy=True)
         z_output = False
-    elif z is not None:
+    elif (z is not None) and (i is None) and (q is None):
         i = np.array(z.real, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
         q = np.array(z.imag, dtype=np.float64, copy=True)
         z_output = True
     else:
-        raise ValueError("Neither i and q or z were supplied as keyword arguments.")
+        raise ValueError("Supply either both i and q or z as keyword arguments.")
     # define types
     cdef np.ndarray[float64_t, ndim=1] i_ravel = i.ravel()
     cdef np.ndarray[float64_t, ndim=1] q_ravel = q.ravel()
@@ -462,19 +462,19 @@ def mixer(i=None, q=None, *,
     cdef double pi[2], po[2]
     create_imbalance_block(pi, alpha, beta)
     create_offset_block(po, gamma, delta)
-    # initialize output i & q arrays
-    if (i is not None) and (q is not None):
+    # initialize i & q arrays
+    if (i is not None) and (q is not None) and (z is None):
         i = np.asarray(i)
         q = np.asarray(q)
         if i.shape != q.shape or np.iscomplex(i).any() or np.iscomplex(q).any():
             raise ValueError("i and q must have the same shape and be real.")
         z = i + 1j * q  # automatically creates np.complex128 type
         z_output = False
-    elif z is not None:
+    elif (z is not None) and (i is None) and (q is None):
         z = np.asarray(z, dtype=np.complex128)
         z_output = True
     else:
-        raise ValueError("Neither i and q or z were supplied as keyword arguments.")
+        raise ValueError("Supply either both i and q or z as keyword arguments.")
     # call function
     cdef np.ndarray[complex128_t, ndim=1] z_ravel = z.ravel()
     result = mixer_vectorized(z_ravel, pi, po)
@@ -735,9 +735,8 @@ def guess(f, i=None, q=None, *,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def fit(np.ndarray[float_t, ndim=1] f,
-        np.ndarray[float2_t, ndim=1] i,
-        np.ndarray[float2_t, ndim=1] q, *,
+def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
+        z=None,
         double fm=DEFAULT_FM,
         bool_t decreasing=DEFAULT_DECREASING,
         bool_t baseline=True,
@@ -771,11 +770,16 @@ def fit(np.ndarray[float_t, ndim=1] f,
             The frequency or frequencies corresponding to the mixer data. Data
             not in a numpy array will be coerced into that format.
         i: numpy.ndarray, float
-            The in-phase component of the mixer's output to be calibrated. q
-            must be supplied if i is supplied.
+            The in-phase component of the signal. q must be supplied if i is
+            supplied. i cannot be used in combination with the z keyword
+            argument.
         q: numpy.ndarray, float
-            The quadrature component of the mixer's output to be calibrated. i
-            must be supplied if q is supplied.
+            The quadrature component of the signal. i must be supplied if q is
+            supplied. q cannot be used in combination with the z keyword
+            argument.
+        z: numpy.ndarray, complex (optional)
+            If neither i or q are supplied, then this keyword argument must be.
+            z represents the complex signal (i + 1j * q).
         fm:  float (optional)
             The reference frequency for the gain and phase parameters of the
             baseline. See the baseline() docstring for more details.
@@ -890,39 +894,62 @@ def fit(np.ndarray[float_t, ndim=1] f,
                     the function call.
 
     """
-    # check that all of the arrays are the same size
-    if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
-        raise ValueError("All input arrays must have the same size.")
-
     # fm is not a fit parameter. It sets the frequency normalization for the gain and phase background.
     if fm < 0: fm = np.median(f)
     if f0 < 0: f0 = fm
-
-    # create memoryviews of the numpy arrays to send to the C++ fitting code
+    # initialize i & q arrays
+    if (i is not None) and (q is not None) and (z is None):
+        i = np.asarray(i)
+        q = np.asarray(q)
+    elif z is not None and i is None and q is None:
+        z = np.asarray(z)
+        i = z.real
+        q = z.imag
+    else:
+        raise ValueError("Supply either both i and q or z as keyword arguments.")
+    # check that all of the arrays are the same size
+    if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
+        raise ValueError("All input arrays must have the same size.")
+    # check dtype
+    if i.dtype != q.dtype:
+        raise ValueError("i and q must have the same data type.")
+    # coerce to c-contiguous array if necessary
     if not f.flags['C_CONTIGUOUS']:
         f = np.ascontiguousarray(f)
     if not i.flags['C_CONTIGUOUS']:
         i = np.ascontiguousarray(i)
     if not q.flags['C_CONTIGUOUS']:
         q = np.ascontiguousarray(q)
+    # create memoryviews of the numpy arrays to send to the C++ fitting code
     cdef float_t[::1] f_view = f
-    cdef float2_t[::1] i_view = i
-    cdef float2_t[::1] q_view = q
-
+    cdef float32_t[::1] i_view32
+    cdef float32_t[::1] q_view32
+    cdef float64_t[::1] i_view64
+    cdef float64_t[::1] q_view64
     # create the parameter blocks
     cdef double pr[4], pd[1], pb[5], pi[2], po[2]
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
                             phase1, alpha, beta, gamma, delta)
-
     # run the fitting code
     cdef string out
     cdef int varied
     cdef bool_t success
-    summary = fit_c(&f_view[0], &i_view[0], &q_view[0], f_view.shape[0], fm, decreasing, baseline, nonlinear, imbalance,
-                    offset, numerical, max_iterations, threads, varied, success, &pr[0], &pd[0], &pb[0], &pi[0],
-                    &po[0]).decode("utf-8").strip()
+    if i.dtype == np.float64:
+        i_view64 = i
+        q_view64 = q
+        summary = fit_c(&f_view[0], &i_view64[0], &q_view64[0], f_view.shape[0], fm, decreasing, baseline, nonlinear,
+                        imbalance, offset, numerical, max_iterations, threads, varied, success, &pr[0], &pd[0], &pb[0],
+                        &pi[0], &po[0]).decode("utf-8").strip()
+    elif i.dtype == np.float32:
+        i_view32 = i
+        q_view32 = q
+        summary = fit_c(&f_view[0], &i_view32[0], &q_view32[0], f_view.shape[0], fm, decreasing, baseline, nonlinear,
+                        imbalance, offset, numerical, max_iterations, threads, varied, success, &pr[0], &pd[0], &pb[0],
+                        &pi[0], &po[0]).decode("utf-8").strip()
+    else:
+        raise ValueError(f"Invalid loop data type: {i.dtype}. Only float32 and float64 are supported.")
+    # log the summary
     log.debug(summary)
-
     # return the fitted parameter values
     result = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear, 'imbalance': imbalance,
               'offset': offset, 'max_iterations': max_iterations, 'threads': threads}  # independent
