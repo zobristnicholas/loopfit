@@ -20,7 +20,13 @@ def f(request):
                          'phase1': -2000.0},
                         {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
                          'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
-                         'phase1': -4300.0}])
+                         'phase1': -4300.0},
+                        {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
+                         'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
+                         'phase1': -4300.0, 'decreasing': True, 'fm': 4.0004},
+                        {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
+                         'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
+                         'phase1': -4300.0, 'decreasing': False, 'fm': 4.0004}])
 def parameters(request):
     return request.param
 
@@ -45,12 +51,14 @@ def data(model, random):
     noise = (random.normal(0, 0.02, model.shape) + 1j * random.normal(0, 0.02, model.shape)).astype(model.dtype)
     return model + noise
 
+
 @pytest.fixture
 def guess(f, data, parameters):
     a = parameters.get('a', 0.0)
     beta = parameters.get('beta', 0.0)
     gamma = parameters.get('gamma', 0.0)
     delta = parameters.get('delta', 0.0)
+    decreasing = parameters.get('decreasing', False)
     # guess by providing the offset if supplied and picking the branch of beta.
     return lf.guess(f, z=data, beta=0 if np.abs(beta) < np.pi / 2 else np.pi, gamma=gamma, delta=delta,
-                    nonlinear=True if a else False)
+                    nonlinear=True if a else False, decreasing=decreasing)
