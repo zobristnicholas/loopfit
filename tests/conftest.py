@@ -21,11 +21,11 @@ def f(request):
                         {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
                          'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
                          'phase1': -4300.0},
-                        {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
-                         'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
+                        {'f0': 4.0004, 'qi': 400000, 'qc': 90000, 'xa': 0.0, 'a': 1.0, 'alpha': 1.1, 'beta': 0.3,
+                         'gamma': 0.1, 'delta': 2.0, 'gain0': 2.0, 'gain1': -5000.0, 'gain2': 1250000.0, 'phase0': 4.1,
                          'phase1': -4300.0, 'decreasing': True, 'fm': 4.0004},
-                        {'f0': 4.0004, 'qi': 500000, 'qc': 80000, 'xa': 0.0, 'a': 0.1, 'alpha': 1.0, 'beta': 0.0,
-                         'gamma': 0.0, 'delta': 0.0, 'gain0': 2.0, 'gain1': -3000.0, 'gain2': 950000.0, 'phase0': 4.1,
+                        {'f0': 4.0004, 'qi': 400000, 'qc': 90000, 'xa': 0.0, 'a': 1.0, 'alpha': 1.1, 'beta': 0.3,
+                         'gamma': 0.1, 'delta': 2.0, 'gain0': 2.0, 'gain1': -5000.0, 'gain2': 1250000.0, 'phase0': 4.1,
                          'phase1': -4300.0, 'decreasing': False, 'fm': 4.0004}])
 def parameters(request):
     return request.param
