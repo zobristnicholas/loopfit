@@ -1,3 +1,5 @@
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 add_cython_target(_wrap CXX)
 add_cython_target(_utils CXX)
 
