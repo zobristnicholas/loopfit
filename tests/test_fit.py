@@ -12,7 +12,7 @@ def check_guess(f, result, guess):
     assert_allclose(lf.model(f, **result['guess']), lf.model(f, **guess))
 
 
-def test_fit_iq(f, model, guess, parameters, data):
+def test_fit_iq(f, guess, parameters, data):
     """Test that the fit works for different parameters with the i/q interface."""
     a = parameters.get('a', 0.0)
     alpha = parameters.get('alpha', 1.0)
@@ -26,7 +26,7 @@ def test_fit_iq(f, model, guess, parameters, data):
     check_guess(f, result, guess)
 
 
-def test_fit_z(f, model, guess, parameters, data):
+def test_fit_z(f, guess, parameters, data):
     """Test that the fit works for different parameters with the z interface."""
     a = parameters.get('a', 0.0)
     alpha = parameters.get('alpha', 1.0)
