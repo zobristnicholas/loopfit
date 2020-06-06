@@ -21,17 +21,17 @@ The Ceres Solver C++ fitting library must be installed prior to installation of 
 ##### In a Conda Environment:
 Run ```conda install -c conda-forge ceres-solver cxx-compiler```. The 
 precompiled fitting code will be downloaded along with the appropriate C++ compiler with which to build the 
-```loopfit``` module. The compiler will become the default for the environment and no more work is necessary.
+_loopfit_ module. The compiler will become the default for the environment and no more work is necessary.
 
 ##### Custom Installation:
-Ceres Solver can also be compiled from the source files and installed to a system location. This allows ```loopfit``` to
+Ceres Solver can also be compiled from the source files and installed to a system location. This allows _loopfit_ to
 function outside of a conda environment or if a custom build of Ceres Solver is required. See 
 [these instructions](http://ceres-solver.org/installation.html) for more details.
 
-To avoid linker errors, the same c and c++ compilers used to compile Ceres-Solver must also be used to compile 
-```loopfit```. Set the $CXX and $CC environment variables for your system to ensure the appropriate compilers are used.
+To avoid linker errors, the same C and C++ compilers used to compile Ceres-Solver must also be used to compile 
+_loopfit_. Set the $CXX and $CC environment variables for your system to ensure the appropriate compilers are used.
 
-#### Git [optional]
+#### Git (optional)
 Git must be installed to clone the repository (as in the install instructions), but it can be downloaded directly from 
 [GitHub](https://github.com/zobristnicholas/loopfit) as well.
 
