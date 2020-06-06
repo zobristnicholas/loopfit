@@ -7,17 +7,34 @@ These instructions will help you install _loopfit_ on your machine. The code is 
 currently no release version. It must be downloaded and installed directly from GitHub.
 
 ### Prerequisites
-The Ceres Solver C++ library must be installed prior to installation of this package. See 
-[these instructions](http://ceres-solver.org/installation.html) for more details.
+#### System
+No testing is currently implemented to verify cross platform compatibility, but the code is expected to be platform 
+independent. Development was done on Mac OSX and Scientific Linux.  
 
+#### Python
 The code is designed to run on all python versions greater than 3.7. All other python prerequisites will be 
 automatically downloaded during the installation. 
 
+#### Ceres Solver
+The Ceres Solver C++ fitting library must be installed prior to installation of this package. 
+
+##### In a Conda Environment:
+Run ```conda install -c conda-forge ceres-solver cxx-compiler```. The 
+precompiled fitting code will be downloaded along with the appropriate C++ compiler with which to build the 
+```loopfit``` module. The compiler will become the default for the environment and no more work is necessary.
+
+##### Custom Installation:
+Ceres Solver can also be compiled from the source files and installed to a system location. This allows ```loopfit``` to
+function outside of a conda environment or if a custom build of Ceres Solver is required. See 
+[these instructions](http://ceres-solver.org/installation.html) for more details.
+
+To avoid linker errors, the same c and c++ compilers used to compile Ceres-Solver must also be used to compile 
+```loopfit```. Set the $CXX and $CC environment variables for your system to ensure the appropriate compilers are used.
+
+#### Git [optional]
 Git must be installed to clone the repository (as in the install instructions), but it can be downloaded directly from 
 [GitHub](https://github.com/zobristnicholas/loopfit) as well.
 
-No testing is currently implemented to verify cross platform compatibility, but the code is expected to be platform 
-independent. Development was done on Mac OSX.  
 
 ### Installing
 On the command line run the following with your choice of \<directory\> and \<version\>:
