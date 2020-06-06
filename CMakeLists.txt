@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.5.0)
-
+### setup project ###
+cmake_minimum_required(VERSION 3.17.3)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 project(loopfit)
 
 ### find python extensions (from scikit-build) ###

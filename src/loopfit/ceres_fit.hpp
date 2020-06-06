@@ -246,8 +246,8 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
                     jacobians[4][0 * 2 + delta] = 0.0;
                     jacobians[4][1 * 2 + delta] = 1.0;
                 };
-                return true;
             };
+            return true;
         };
     private:
         const T f_;
@@ -269,9 +269,9 @@ std::string fit(const T f[], const U i[], const U q[], const unsigned int data_s
             problem.AddResidualBlock(
                 new ceres::NumericDiffCostFunction<Residual<T, U>, ceres::CENTRAL, 2, 4, 1, 5, 2, 2>(
                     new Residual<T, U>(f[ii], i[ii], q[ii], fm, decreasing)
-            ),
+                ),
             NULL, pr, pd, pb, pi, po
-        );
+            );
         }
         else {
             problem.AddResidualBlock(new CostFunction<T, U>(f[ii], i[ii], q[ii], fm, decreasing),

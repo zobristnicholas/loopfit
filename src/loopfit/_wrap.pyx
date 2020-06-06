@@ -133,7 +133,10 @@ def calibrate(f, i=None, q=None, *,
     if fm < 0: fm = np.median(f)  # default depends on f
     f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
-    cdef double pr[4], pb[5], pi[2], po[2]
+    cdef double pr[4]
+    cdef double pb[5]
+    cdef double pi[2]
+    cdef double po[2]
     create_resonance_block(pr, qi, qc, f0, xa)
     create_baseline_block(pb, gain0, gain1, gain2, phase0, phase1)
     create_imbalance_block(pi, alpha, beta)
@@ -304,7 +307,8 @@ def resonance(f, *,
     """
     f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
-    cdef double pr[4], pd[1]
+    cdef double pr[4]
+    cdef double pd[1]
     create_resonance_block(&pr[0], qi, qc, f0, xa)
     create_detuning_block(&pd[0], a)
     # call function
@@ -388,7 +392,8 @@ def detuning(f, *,
     if f0 < 0: f0 = kwargs.get('fm', np.median(f))
     f = np.asarray(f)  # no copy if already an array
     # create the parameter blocks
-    cdef double pr[4], pd[1]
+    cdef double pr[4]
+    cdef double pd[1]
     create_resonance_block(&pr[0], qi, qc, f0, xa)
     create_detuning_block(&pd[0], a)
     # call function
@@ -481,7 +486,8 @@ def mixer(i=None, q=None, *,
 
     """
     # create the parameter blocks
-    cdef double pi[2], po[2]
+    cdef double pi[2]
+    cdef double po[2]
     create_imbalance_block(pi, alpha, beta)
     create_offset_block(po, gamma, delta)
     # initialize i & q arrays
@@ -607,7 +613,11 @@ def model(f, *,
     if f0 < 0: f0 = fm
     f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
     # create the parameter blocks
-    cdef double pr[4], pd[1], pb[5], pi[2], po[2]
+    cdef double pr[4]
+    cdef double pd[1]
+    cdef double pb[5]
+    cdef double pi[2]
+    cdef double po[2]
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
                             phase1, alpha, beta, gamma, delta)
     # call function
@@ -955,7 +965,11 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     cdef float64_t[::1] i_view64
     cdef float64_t[::1] q_view64
     # create the parameter blocks
-    cdef double pr[4], pd[1], pb[5], pi[2], po[2]
+    cdef double pr[4]
+    cdef double pd[1]
+    cdef double pb[5]
+    cdef double pi[2]
+    cdef double po[2]
     create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
                             phase1, alpha, beta, gamma, delta)
     # create guess to save for later
@@ -964,8 +978,8 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
              'fm': fm, 'decreasing': decreasing}
     # run the fitting code
     cdef string out
-    cdef int varied
-    cdef bool_t success
+    cdef int varied = 0
+    cdef bool_t success = False
     if i.dtype == np.float64:
         i_view64 = i
         q_view64 = q
