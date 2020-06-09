@@ -113,19 +113,19 @@ void calibrate(const T f, U& i, U& q, const bool center, const double fm, const 
 // construct the residual for a numerical jacobian calculation
 template<class T, class U>
 struct Residual {
-    Residual(const T f, const U i, const U q, const double fm, const bool decreasing):
-        f_(f), i_(i), q_(q), fm_(fm), decreasing_(decreasing) {}
+    Residual(const T f, const U i, const U q, const std::complex<double> weight, const double fm, const bool decreasing):
+        f_(f), i_(i), q_(q), weight_(weight), fm_(fm), decreasing_(decreasing) {}
     bool operator()(const double* const pr, const double* const pd, const double* const pb, const double* const pi,
     const double* const po, double* residual) const {
         std::complex<double> z = model(f_, fm_, decreasing_, pr, pd, pb, pi, po);
-        residual[0] = i_ - z.real();
-        residual[1] = q_ - z.imag();
+        residual[0] = (i_ - z.real()) * weight_.real();
+        residual[1] = (q_ - z.imag()) * weight_.imag();
         return true;
     };
  private:
     const T f_;
-    const U i_;
-    const U q_;
+    const U i_, q_;
+    const std::complex<double> weight_;
     const double fm_;
     const bool decreasing_;
 };
@@ -135,8 +135,8 @@ struct Residual {
 template<class T, class U>
 class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
     public:
-        CostFunction(const T f, const U i, const U q, const double fm, const bool decreasing):
-            f_(f), i_(i), q_(q), fm_(fm), decreasing_(decreasing) {}
+        CostFunction(const T f, const U i, const U q, const std::complex<double> weight, const double fm,
+                     const bool decreasing): f_(f), i_(i), q_(q), weight_(weight), fm_(fm), decreasing_(decreasing) {}
         virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
             // break out parameters
             const double* pr = parameters[0];
@@ -151,8 +151,8 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
             // equivalent of model(f_, fm_, decreasing_, pr, pd, pb, pi, po)
             const std::complex<double> z = mixer(bl_res, pi, po);
             // compute residual
-            residuals[0] = z.real() - i_;  // real part
-            residuals[1] = z.imag() - q_;  // imaginary part
+            residuals[0] = (z.real() - i_) * weight_.real();  // real part
+            residuals[1] = (z.imag() - q_) * weight_.imag();  // imaginary part
             // compute Jacobian
             if (jacobians != NULL) {
                 // expressions needed for most blocks
@@ -190,61 +190,61 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
                     const std::complex<double> dzdqi = (-J * bl * pr[qc] * qc2_xa_i + t2 * dxdqi) / denom_sq;
                     const std::complex<double> j_qi = mixer(dzdqi, pi, dpo);
                     // [parameter block][residual index * parameter block size + parameter index]
-                    jacobians[0][0 * 4 + qi] = j_qi.real();
-                    jacobians[0][1 * 4 + qi] = j_qi.imag();
+                    jacobians[0][0 * 4 + qi] = j_qi.real() * weight_.real();
+                    jacobians[0][1 * 4 + qi] = j_qi.imag() * weight_.imag();
                     const std::complex<double> dzdqc = (-J * bl * pr[qi] * (2.0 * pr[qi] * (x + pr[xa]) - J) +
                                                         t2 * dxdqc) / denom_sq;
                     const std::complex<double> j_qc = mixer(dzdqc, pi, dpo);
-                    jacobians[0][0 * 4 + qc] = j_qc.real();
-                    jacobians[0][1 * 4 + qc] = j_qc.imag();
+                    jacobians[0][0 * 4 + qc] = j_qc.real() * weight_.real();
+                    jacobians[0][1 * 4 + qc] = j_qc.imag() * weight_.imag();
                     const std::complex<double> dzdf0 = t2 / denom_sq * dxdf0;
                     const std::complex<double> j_f0 = mixer(dzdf0, pi, dpo);
-                    jacobians[0][0 * 4 + f0] = j_f0.real();
-                    jacobians[0][1 * 4 + f0] = j_f0.imag();
+                    jacobians[0][0 * 4 + f0] = j_f0.real() * weight_.real();
+                    jacobians[0][1 * 4 + f0] = j_f0.imag() * weight_.imag();
                     const std::complex<double> dzdxa = t1 / denom;
                     const std::complex<double> j_xa = mixer(dzdxa, pi, dpo);
-                    jacobians[0][0 * 4 + xa] = j_xa.real();
-                    jacobians[0][1 * 4 + xa] = j_xa.imag();
+                    jacobians[0][0 * 4 + xa] = j_xa.real() * weight_.real();
+                    jacobians[0][1 * 4 + xa] = j_xa.imag() * weight_.imag();
                 };
                 if (jacobians[1] != NULL) {  // pd
                     const std::complex<double> dzdasqrt = t2 * dxda_sqrt / denom_sq;
                     const std::complex<double> j_a_sqrt = mixer(dzdasqrt, pi, dpo);
-                    jacobians[1][0 * 1 + a_sqrt] = j_a_sqrt.real();
-                    jacobians[1][1 * 1 + a_sqrt] = j_a_sqrt.imag();
+                    jacobians[1][0 * 1 + a_sqrt] = j_a_sqrt.real() * weight_.real();
+                    jacobians[1][1 * 1 + a_sqrt] = j_a_sqrt.imag() * weight_.imag();
                 };
                 if (jacobians[2] != NULL) {  // pb
                     const std::complex<double> xm = (f_ - fm_) / fm_;
                     const std::complex<double> dzdgain0 = res * std::exp(J * (pb[phase0] + pb[phase1] * xm));
                     const std::complex<double> j_gain0 = mixer(dzdgain0, pi, dpo);
-                    jacobians[2][0 * 5 + gain0] = j_gain0.real();
-                    jacobians[2][1 * 5 + gain0] = j_gain0.imag();
+                    jacobians[2][0 * 5 + gain0] = j_gain0.real() * weight_.real();
+                    jacobians[2][1 * 5 + gain0] = j_gain0.imag() * weight_.imag();
                     const std::complex<double> j_gain1 = xm * j_gain0;
-                    jacobians[2][0 * 5 + gain1] = j_gain1.real();
-                    jacobians[2][1 * 5 + gain1] = j_gain1.imag();
+                    jacobians[2][0 * 5 + gain1] = j_gain1.real() * weight_.real();
+                    jacobians[2][1 * 5 + gain1] = j_gain1.imag() * weight_.imag();
                     const std::complex<double> j_gain2 = xm * j_gain1;
-                    jacobians[2][0 * 5 + gain2] = j_gain2.real();
-                    jacobians[2][1 * 5 + gain2] = j_gain2.imag();
+                    jacobians[2][0 * 5 + gain2] = j_gain2.real() * weight_.real();
+                    jacobians[2][1 * 5 + gain2] = j_gain2.imag() * weight_.imag();
                     const std::complex<double> dzdphase0 = J * dzdgain0 * (pb[gain0] + pb[gain1] * xm +
                                                                            pb[gain2] * pow(xm, 2.0));
                     const std::complex<double> j_phase0 = mixer(dzdphase0, pi, dpo);
-                    jacobians[2][0 * 5 + phase0] = j_phase0.real();
-                    jacobians[2][1 * 5 + phase0] = j_phase0.imag();
+                    jacobians[2][0 * 5 + phase0] = j_phase0.real() * weight_.real();
+                    jacobians[2][1 * 5 + phase0] = j_phase0.imag() * weight_.imag();
                     const std::complex<double> j_phase1 = xm * j_phase0;
-                    jacobians[2][0 * 5 + phase1] = j_phase1.real();
-                    jacobians[2][1 * 5 + phase1] = j_phase1.imag();
+                    jacobians[2][0 * 5 + phase1] = j_phase1.real() * weight_.real();
+                    jacobians[2][1 * 5 + phase1] = j_phase1.imag() * weight_.imag();
                 };
                 if (jacobians[3] != NULL) {  // pi
                     const std::complex<double> bl_res_exp = bl_res * std::exp(J * pi[beta]);
                     jacobians[3][0 * 2 + alpha] = 0.0;
-                    jacobians[3][1 * 2 + alpha] = bl_res_exp.imag();
+                    jacobians[3][1 * 2 + alpha] = bl_res_exp.imag() * weight_.imag();
                     jacobians[3][0 * 2 + beta] = 0.0;
-                    jacobians[3][1 * 2 + beta] = pi[alpha] * bl_res_exp.real();
+                    jacobians[3][1 * 2 + beta] = pi[alpha] * bl_res_exp.real() * weight_.imag();
                 };
                 if (jacobians[4] != NULL) {  // po
-                    jacobians[4][0 * 2 + gamma_] = 1.0;
+                    jacobians[4][0 * 2 + gamma_] = weight_.real();
                     jacobians[4][1 * 2 + gamma_] = 0.0;
                     jacobians[4][0 * 2 + delta] = 0.0;
-                    jacobians[4][1 * 2 + delta] = 1.0;
+                    jacobians[4][1 * 2 + delta] = weight_.imag();
                 };
             };
             return true;
@@ -252,29 +252,31 @@ class CostFunction : public ceres::SizedCostFunction <2, 4, 1, 5, 2, 2> {
     private:
         const T f_;
         const U i_, q_;
+        const std::complex<double> weight_;
         const double fm_;
         const bool decreasing_;
 };
 
 
 template<class T, class U>
-std::string fit(const T f[], const U i[], const U q[], const unsigned int data_size, const double fm,
-                const bool decreasing, const bool baseline, const bool nonlinear, const bool imbalance,
-                const bool offset, const bool numerical, const int max_iterations, int& threads, int& varied,
-                bool& success, double pr[], double pd[], double pb[], double pi[], double po[]) {
+std::string fit(const T f[], const U i[], const U q[], const std::complex<double> weights[],
+                const unsigned int data_size, const double fm, const bool decreasing, const bool baseline, 
+                const bool nonlinear, const bool imbalance, const bool offset, const bool numerical, 
+                const int max_iterations, int& threads, int& varied, bool& success, double pr[], double pd[],
+                double pb[], double pi[], double po[]) {
     // set up the residual
     ceres::Problem problem;
     for (int ii = 0; ii < data_size; ++ii) {
         if (numerical) {
             problem.AddResidualBlock(
                 new ceres::NumericDiffCostFunction<Residual<T, U>, ceres::CENTRAL, 2, 4, 1, 5, 2, 2>(
-                    new Residual<T, U>(f[ii], i[ii], q[ii], fm, decreasing)
+                    new Residual<T, U>(f[ii], i[ii], q[ii], weights[ii], fm, decreasing)
                 ),
             NULL, pr, pd, pb, pi, po
             );
         }
         else {
-            problem.AddResidualBlock(new CostFunction<T, U>(f[ii], i[ii], q[ii], fm, decreasing),
+            problem.AddResidualBlock(new CostFunction<T, U>(f[ii], i[ii], q[ii], weights[ii], fm, decreasing),
                                      NULL, pr, pd, pb, pi, po);
         };
     };

@@ -16,6 +16,6 @@ cdef extern from "ceres_fit.hpp":
     void calibrate[T, U](const T, U&, U&, const bool_t, const double, const double*, const double*, const double*,
                          const double*)
 
-    string fit[T, U](const T*, const U*, const U*, const unsigned int, const double, const bool_t, const bool_t,
-                     const bool_t, const bool_t, const bool_t, const bool_t, const int, int&, int&, bool_t&,
-                     double*, double*, double*, double*, double*)
+    string fit[T, U](const T*, const U*, const U*, const double complex*, const unsigned int, const double,
+                     const bool_t, const bool_t, const bool_t, const bool_t, const bool_t, const bool_t, const int,
+                     int&, int&, bool_t&, double*, double*, double*, double*, double*)

@@ -769,6 +769,7 @@ def guess(f, i=None, q=None, *,
 @cython.wraparound(False)
 def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         z=None,
+        sigma=None,
         double fm=DEFAULT_FM,
         bool_t decreasing=DEFAULT_DECREASING,
         bool_t baseline=True,
@@ -778,7 +779,6 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         bool_t numerical=False,
         int max_iterations=2000,
         int threads=1,
-        sigma=None,
         double qi=DEFAULT_QI,
         double qc=DEFAULT_QC,
         double f0=DEFAULT_F0,
@@ -812,6 +812,13 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         z: numpy.ndarray, complex (optional)
             If neither i or q are supplied, then this keyword argument must be.
             z represents the complex signal (i + 1j * q).
+        sigma: numpy.ndarray, complex
+            This argument represents the standard deviation of the data and can
+            be a single value or an array of the same length as the data. The
+            real part corresponds to i and the imaginary part to q. The fit
+            residuals will be weighted by the inverse square of this value. If
+            not supplied, the chi_squared, aic, and bic statistics will be
+            computed with sigma = 1 + 1j.
         fm:  float (optional)
             The reference frequency for the gain and phase parameters of the
             baseline. See the baseline() docstring for more details.
@@ -843,12 +850,6 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         threads: integer
             The number of threads to use in the fit. This parameter may be
             ignored if ceres-solver was not compiled with threading enabled.
-        sigma: numpy.ndarray, complex
-            This argument represents the standard deviation of the data and can
-            be a single value or an array of the same length as the data. The
-            real part corresponds to i and the imaginary part to q. If
-            supplied, the chi_squared, aic, and bic statistics will be computed
-            and added to the result at the end of the fit.
         qi: float
             The starting value for the internal quality factor of the
             resonator. See the resonance() docstring for more details.
@@ -920,16 +921,11 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
                     max_iterations, True is returned. Otherwise, False is
                     returned.
                 chi_squared: float
-                    The chi squared metric for the fit. It is only included in
-                    the dictionary if sigma was supplied in the function call.
+                    The chi squared metric for the fit.
                 aic: float
-                    The Akaike information criterion for the fit.  It is only
-                    included in the dictionary if sigma was supplied in the
-                    function call.
+                    The Akaike information criterion for the fit.
                 bic: float
-                    The Bayesian information criterion  for the fit.  It is
-                    only included in the dictionary if sigma was supplied in
-                    the function call.
+                    The Bayesian information criterion  for the fit.
 
     """
     # fm is not a fit parameter. It sets the frequency normalization for the gain and phase background.
@@ -948,6 +944,18 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     # check that all of the arrays are the same size
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
+    # coerce sigma to the correct shape and dtype
+    if sigma is None:
+        sigma = 1 + 1j
+    sigma = np.asarray(sigma, dtype=np.complex128)
+    sigma = np.broadcast_to(sigma, f.shape[0])
+    # scale data
+    cdef double scale = max(np.abs(i).max(), np.abs(q).max())
+    i_scaled = i / scale
+    q_scaled = q / scale
+    cdef double f_scale = np.median(np.abs(f))
+    f_scaled = f / f_scale
+    sigma_scaled = sigma / np.median([np.abs(sigma.real), np.abs(sigma.imag)])
     # check dtype
     if i.dtype != q.dtype:
         raise ValueError("i and q must have the same data type.")
@@ -958,20 +966,23 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         i = np.ascontiguousarray(i)
     if not q.flags['C_CONTIGUOUS']:
         q = np.ascontiguousarray(q)
+    if not sigma_scaled.flags['C_CONTIGUOUS']:
+        sigma_scaled = np.ascontiguousarray(sigma_scaled)
     # create memoryviews of the numpy arrays to send to the C++ fitting code
-    cdef float_t[::1] f_view = f
+    cdef const float_t[::1] f_view = f_scaled
     cdef float32_t[::1] i_view32
     cdef float32_t[::1] q_view32
     cdef float64_t[::1] i_view64
     cdef float64_t[::1] q_view64
+    cdef const complex128_t[::1] weight_view = 1. / sigma_scaled
     # create the parameter blocks
     cdef double pr[4]
     cdef double pd[1]
     cdef double pb[5]
     cdef double pi[2]
     cdef double po[2]
-    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
-                            phase1, alpha, beta, gamma, delta)
+    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0 / f_scale, xa, a, gain0 / scale,
+                            gain1 / scale, gain2 / scale, phase0, phase1, alpha, beta, gamma / scale, delta / scale)
     # create guess to save for later
     guess = {'qi': qi, 'qc': qc, 'f0': f0, 'xa': xa, 'a': a, 'gain0': gain0, 'gain1': gain1, 'gain2': gain2,
              'phase0': phase0, 'phase1': phase1, 'alpha': alpha, 'beta': beta, 'gamma': gamma, 'delta': delta,
@@ -981,17 +992,17 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     cdef int varied = 0
     cdef bool_t success = False
     if i.dtype == np.float64:
-        i_view64 = i
-        q_view64 = q
-        summary = fit_c(&f_view[0], &i_view64[0], &q_view64[0], f_view.shape[0], fm, decreasing, baseline, nonlinear,
-                        imbalance, offset, numerical, max_iterations, threads, varied, success, &pr[0], &pd[0], &pb[0],
-                        &pi[0], &po[0]).decode("utf-8").strip()
+        i_view64 = i_scaled
+        q_view64 = q_scaled
+        summary = fit_c(&f_view[0], &i_view64[0], &q_view64[0], &weight_view[0], f_view.shape[0], fm / f_scale,
+                        decreasing, baseline, nonlinear, imbalance, offset, numerical, max_iterations, threads, varied,
+                        success, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
     elif i.dtype == np.float32:
-        i_view32 = i
-        q_view32 = q
-        summary = fit_c(&f_view[0], &i_view32[0], &q_view32[0], f_view.shape[0], fm, decreasing, baseline, nonlinear,
-                        imbalance, offset, numerical, max_iterations, threads, varied, success, &pr[0], &pd[0], &pb[0],
-                        &pi[0], &po[0]).decode("utf-8").strip()
+        i_view32 = i_scaled
+        q_view32 = q_scaled
+        summary = fit_c(&f_view[0], &i_view32[0], &q_view32[0], &weight_view[0], f_view.shape[0], fm / f_scale,
+                        decreasing, baseline, nonlinear, imbalance, offset, numerical, max_iterations, threads, varied,
+                        success, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
     else:
         raise ValueError(f"Invalid loop data type: {i.dtype}. Only float32 and float64 are supported.")
     # log the summary
@@ -1000,20 +1011,18 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     result = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear, 'imbalance': imbalance,
               'offset': offset, 'max_iterations': max_iterations, 'threads': threads, 'guess': guess}  # independent
     result.update({"summary": summary, "size": 2 * f.shape[0], "varied": varied, "success": success})  # metrics
-    result.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2], 'xa': pr[3]})  # resonance
+    result.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2] * f_scale, 'xa': pr[3]})  # resonance
     result.update({'a': pow(pd[0], 2)})  # detuning
-    result.update({'gain0': pb[0], 'gain1': pb[1], 'gain2': pb[2], 'phase0': pb[3], 'phase1': pb[4]})  # baseline
+    result.update({'gain0': pb[0] * scale, 'gain1': pb[1] * scale, 'gain2': pb[2] * scale, 'phase0': pb[3],
+                   'phase1': pb[4]})  # baseline
     result.update({'alpha': pi[0], 'beta': pi[1]})  # imbalance
-    result.update({'gamma': po[0], 'delta': po[1]})  # offset
+    result.update({'gamma': po[0] * scale, 'delta': po[1] * scale})  # offset
     # compute statistics
-    cdef np.ndarray[complex128_t, ndim=1] m
-    if sigma is not None:
-        m = model(f, **result)
-        sigma = np.broadcast_to(sigma, f.shape[0])
-        chi_squared = (((m.real - i) / sigma.real)**2).sum() + (((m.imag - q) / sigma.imag)**2).sum()
-        # -2 * Log(likelihood)
-        scaled_likelihood = chi_squared + np.log(2 * np.pi * sigma.real).sum() + np.log(2 * np.pi * sigma.imag).sum()
-        aic = 2 * result['varied'] + scaled_likelihood
-        bic = result['varied'] * np.log(2 * f.shape[0]) + scaled_likelihood
-        result.update({'chi_squared': chi_squared, 'aic': aic, 'bic': bic})
+    cdef np.ndarray[complex128_t, ndim=1] m = model(f, **result)
+    chi_squared = (((m.real - i) / sigma.real)**2).sum() + (((m.imag - q) / sigma.imag)**2).sum()
+    # -2 * Log(likelihood)
+    scaled_likelihood = chi_squared + np.log(2 * np.pi * sigma.real).sum() + np.log(2 * np.pi * sigma.imag).sum()
+    aic = 2 * result['varied'] + scaled_likelihood
+    bic = result['varied'] * np.log(2 * f.shape[0]) + scaled_likelihood
+    result.update({'chi_squared': chi_squared, 'aic': aic, 'bic': bic})
     return result
