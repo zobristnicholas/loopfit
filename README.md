@@ -60,7 +60,7 @@ in the beta stage and subject to changes in the code's API.
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgements 
-This code is build on top of and owes its performance to the wonderful C++ fitting library 
+This code is built on top of and owes its performance to the wonderful C++ fitting library 
 [Ceres Solver](http://ceres-solver.org).
 
 The initial guess for the loop fit was developed starting from the method used in the
