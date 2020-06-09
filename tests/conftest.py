@@ -46,9 +46,15 @@ def resonance(f, parameters):
     return lf.resonance(f, **parameters)
 
 
+@pytest.fixture(params=[0.02 + 0.02j, 0.01 + 0.03j])
+def sigma(request):
+    return request.param
+
+
 @pytest.fixture
-def data(model, random):
-    noise = (random.normal(0, 0.02, model.shape) + 1j * random.normal(0, 0.02, model.shape)).astype(model.dtype)
+def data(model, random, sigma):
+    noise = (random.normal(0, sigma.real, model.shape) +
+             1j * random.normal(0, sigma.imag, model.shape)).astype(model.dtype)
     return model + noise
 
 

@@ -3,14 +3,14 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
-def test_components_iq(f, model, baseline, resonance, parameters):
+def test_components_iq(model, baseline, resonance, parameters):
     """Test that  mixer(baseline * resonance) = model (i/q interface)."""
     z = baseline * resonance
     i, q = lf.mixer(z.real, z.imag, **parameters)
     assert_allclose(model, i + 1j * q)
 
 
-def test_components_z(f, model, baseline, resonance, parameters):
+def test_components_z(model, baseline, resonance, parameters):
     """Test that  mixer(baseline * resonance) = model (z interface)."""
     assert_allclose(model, lf.mixer(z=baseline * resonance, **parameters))
 
