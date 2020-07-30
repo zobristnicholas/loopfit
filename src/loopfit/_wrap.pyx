@@ -902,6 +902,8 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
             A dictionary of the fit parameter values. The fit options fm,
             decreasing, baseline, nonlinear, imbalance, offset, and
             max_iterations are included in the dictionary along with
+                q0: float
+                    The loaded quality factor defined as 1 / (1 / qi + 1 / qc).
                 threads: integer
                     The actual number of threads used in the fit. This value
                     may not be the same as used in the function call depending
@@ -1017,6 +1019,7 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
                    'phase1': pb[4]})  # baseline
     result.update({'alpha': pi[0], 'beta': pi[1]})  # imbalance
     result.update({'gamma': po[0] * scale, 'delta': po[1] * scale})  # offset
+    result.update({'q0': 1 / (1 / result['qi'] + 1 / result['qc'])})  # derived
     # compute statistics
     cdef np.ndarray[complex128_t, ndim=1] m = model(f, **result)
     chi_squared = (((m.real - i) / sigma.real)**2).sum() + (((m.imag - q) / sigma.imag)**2).sum()
