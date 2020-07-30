@@ -50,16 +50,16 @@ def compute_mixer_calibration(offset, imbalance, **kwargs):
         amp = np.sqrt(2 * np.mean(ip**2, axis=-1))
         if 'alpha' not in kwargs.keys():
             alpha = np.sqrt(2 * np.mean(qp**2, axis=-1)) / amp
-            alpha = np.mean(alpha)
         else:
             alpha = kwargs['alpha']
         if 'beta' not in kwargs.keys():
             ratio = np.angle(np.fft.rfft(ip)[np.arange(n), f_i_ind[:, 0]] /
                              np.fft.rfft(qp)[np.arange(n), f_q_ind[:, 0]])  # for arcsine branch
             beta = np.arcsin(np.sign(ratio) * 2 * np.mean(qp * ip, axis=-1) / (alpha * amp**2)) + np.pi * (ratio < 0)
-            beta = np.mean(beta)
         else:
             beta = kwargs['beta']
+        alpha = np.mean(alpha)
+        beta = np.mean(beta)
     else:
         alpha = kwargs.get('alpha', DEFAULT_ALPHA)
         beta = kwargs.get('beta', DEFAULT_BETA)
