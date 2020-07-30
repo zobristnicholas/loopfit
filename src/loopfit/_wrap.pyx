@@ -769,7 +769,7 @@ def guess(f, i=None, q=None, *,
 @cython.wraparound(False)
 def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         z=None,
-        sigma=None,
+        variance=None,
         double fm=DEFAULT_FM,
         bool_t decreasing=DEFAULT_DECREASING,
         bool_t baseline=True,
@@ -812,13 +812,13 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         z: numpy.ndarray, complex (optional)
             If neither i or q are supplied, then this keyword argument must be.
             z represents the complex signal (i + 1j * q).
-        sigma: numpy.ndarray, complex
-            This argument represents the standard deviation of the data and can
-            be a single value or an array of the same length as the data. The
-            real part corresponds to i and the imaginary part to q. The fit
+        variance: numpy.ndarray, complex
+            This argument represents the variance of the data and can be a
+            single value or an array of the same length as the data. The real
+            part corresponds to i and the imaginary part to q. The fit
             residuals will be weighted by the inverse square of this value. If
             not supplied, the chi_squared, aic, and bic statistics will be
-            computed with sigma = 1 + 1j.
+            computed with variance = 1 + 1j.
         fm:  float (optional)
             The reference frequency for the gain and phase parameters of the
             baseline. See the baseline() docstring for more details.
@@ -944,10 +944,10 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     # check that all of the arrays are the same size
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
-    # coerce sigma to the correct shape and dtype
-    if sigma is None:
-        sigma = 1 + 1j
-    sigma = np.asarray(sigma, dtype=np.complex128)
+    # coerce variance to the correct shape and dtype
+    if variance is None:
+        variance = 1 + 1j
+    sigma = np.asarray(np.sqrt(variance.real) + 1j * np.sqrt(variance.imag), dtype=np.complex128)
     sigma = np.broadcast_to(sigma, f.shape[0])
     # scale data
     cdef double scale = max(np.abs(i).max(), np.abs(q).max())
