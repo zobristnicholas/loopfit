@@ -742,8 +742,11 @@ def guess(f, i=None, q=None, *,
     fwhm_mask = magnitude < fwhm
     regions, _ = label(fwhm_mask)  # find the regions where magnitude < fwhm
     region = regions[f_index_min]  # pick the one that includes the minimum
-    f_masked = f[find_objects(regions, max_label=region)[-1]]  # mask f to only include that region
-    bandwidth = f_masked.max() - f_masked.min()  # find the bandwidth
+    try:
+        f_masked = f[find_objects(regions, max_label=region)[-1]]  # mask f to only include that region
+        bandwidth = f_masked.max() - f_masked.min()  # find the bandwidth
+    except IndexError:  # no found region
+        bandwidth = 0  # defer calculation
     # Q0 = f0 / fwhm bandwidth
     q0_guess = f0_guess / bandwidth if bandwidth != 0 else 1e4
     # Q0 / Qi = min(mag) / max(mag)
