@@ -27,19 +27,20 @@ def bandpass(data):
     fft_data[:, 0] = 0
     indices = np.array([np.arange(fft_data[0, :].size)] * fft_data[:, 0].size)
     f_data_ind = np.argmax(np.abs(fft_data), axis=-1)[:, np.newaxis]
-    fft_data[np.logical_or(indices < f_data_ind - 1, indices > f_data_ind + 1)] = 0
+    fft_data[np.logical_or(indices < f_data_ind - 1,
+                           indices > f_data_ind + 1)] = 0
     data_new = np.fft.irfft(fft_data, data[0, :].size)
     return data_new, f_data_ind
 
 
-def compute_mixer_calibration(offset, imbalance, **kwargs):
+def compute_mixer_calibration(offset, imbalance, **kws):
     if offset is not None:
         z_offset = np.mean(offset)
-        gamma = z_offset.real if 'gamma' not in kwargs.keys() else kwargs['gamma']
-        delta = z_offset.imag if 'delta' not in kwargs.keys() else kwargs['delta']
+        gamma = z_offset.real if 'gamma' not in kws.keys() else kws['gamma']
+        delta = z_offset.imag if 'delta' not in kws.keys() else kws['delta']
     else:
-        gamma = kwargs.get('gamma', DEFAULT_GAMMA)
-        delta = kwargs.get('delta', DEFAULT_DELTA)
+        gamma = kws.get('gamma', DEFAULT_GAMMA)
+        delta = kws.get('delta', DEFAULT_DELTA)
     if imbalance is not None:
         imbalance = np.atleast_2d(imbalance)
         # bandpass filter the I and Q signals
@@ -48,19 +49,21 @@ def compute_mixer_calibration(offset, imbalance, **kwargs):
         qp, f_q_ind = bandpass(imbalance.imag)
         # compute alpha and beta
         amp = np.sqrt(2 * np.mean(ip**2, axis=-1))
-        if 'alpha' not in kwargs.keys():
+        if 'alpha' not in kws.keys():
             alpha = np.sqrt(2 * np.mean(qp**2, axis=-1)) / amp
         else:
-            alpha = kwargs['alpha']
-        if 'beta' not in kwargs.keys():
-            ratio = np.angle(np.fft.rfft(ip)[np.arange(n), f_i_ind[:, 0]] /
-                             np.fft.rfft(qp)[np.arange(n), f_q_ind[:, 0]])  # for arcsine branch
-            beta = np.arcsin(np.sign(ratio) * 2 * np.mean(qp * ip, axis=-1) / (alpha * amp**2)) + np.pi * (ratio < 0)
+            alpha = kws['alpha']
+        if 'beta' not in kws.keys():
+            # for arcsine branch
+            ratio = np.angle(np.fft.rfft(ip)[np.arange(n), f_i_ind[:, 0]]
+                             / np.fft.rfft(qp)[np.arange(n), f_q_ind[:, 0]])
+            beta = np.arcsin(np.sign(ratio) * 2 * np.mean(qp * ip, axis=-1)
+                             / (alpha * amp**2)) + np.pi * (ratio < 0)
         else:
-            beta = kwargs['beta']
+            beta = kws['beta']
         alpha = np.mean(alpha)
         beta = np.mean(beta)
     else:
-        alpha = kwargs.get('alpha', DEFAULT_ALPHA)
-        beta = kwargs.get('beta', DEFAULT_BETA)
+        alpha = kws.get('alpha', DEFAULT_ALPHA)
+        beta = kws.get('beta', DEFAULT_BETA)
     return alpha, beta, gamma, delta

@@ -9,8 +9,10 @@ from scipy.ndimage import label, find_objects
 
 from ._utils import *
 from ._utils cimport *
-from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c, model as model_c, fit as fit_c,
-                         calibrate as calibrate_c, detuning as detuning_c, mixer as mixer_c)
+from .ceres_fit cimport (resonance as resonance_c, baseline as baseline_c,
+                         model as model_c, fit as fit_c,
+                         calibrate as calibrate_c, detuning as detuning_c,
+                         mixer as mixer_c)
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -18,9 +20,11 @@ log.addHandler(logging.NullHandler())
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef calibrate_vectorized(np.ndarray[float_t, ndim=1] f, np.ndarray[float64_t, ndim=1] i,
-                          np.ndarray[float64_t, ndim=1] q, bool_t center, double fm, double pr[], double pb[],
-                          double pi[], double po[]):
+cdef calibrate_vectorized(np.ndarray[float_t, ndim=1] f,
+                          np.ndarray[float64_t, ndim=1] i,
+                          np.ndarray[float64_t, ndim=1] q, bool_t center,
+                          double fm, double pr[], double pb[], double pi[],
+                          double po[]):
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
     for ii in range(f.shape[0]):
@@ -143,15 +147,18 @@ def calibrate(f, i=None, q=None, *,
     create_offset_block(po, gamma, delta)
     # initialize output i & q arrays (copy since calibrate_c is in-place)
     if (i is not None) and (q is not None) and (z is None):
-        i = np.array(i, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
+        # copy since calibrate_c is in-place
+        i = np.array(i, dtype=np.float64, copy=True)
         q = np.array(q, dtype=np.float64, copy=True)
         z_output = False
     elif (z is not None) and (i is None) and (q is None):
-        i = np.array(z.real, dtype=np.float64, copy=True)  # copy since calibrate_c is in-place
+        # copy since calibrate_c is in-place
+        i = np.array(z.real, dtype=np.float64, copy=True)
         q = np.array(z.imag, dtype=np.float64, copy=True)
         z_output = True
     else:
-        raise ValueError("Supply either both i and q or z as keyword arguments.")
+        raise ValueError("Supply either both i and q or z as keyword "
+                         "arguments.")
     # define types
     cdef np.ndarray[float64_t, ndim=1] i_ravel = i.ravel()
     cdef np.ndarray[float64_t, ndim=1] q_ravel = q.ravel()
@@ -162,12 +169,15 @@ def calibrate(f, i=None, q=None, *,
     elif f.dtype == np.float32:
         f_ravel32 = f.ravel()
     else:
-        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid data type for f: {f.dtype}. "
+                         "Only float32 and float64 are supported.")
     # calibrate the data
     if f.dtype == np.float64:
-        calibrate_vectorized(f_ravel64, i_ravel, q_ravel, center, fm, pr, pb, pi, po)
+        calibrate_vectorized(f_ravel64, i_ravel, q_ravel, center, fm, pr, pb,
+                             pi, po)
     elif f.dtype == np.float32:
-        calibrate_vectorized(f_ravel32, i_ravel, q_ravel, center, fm, pr, pb, pi, po)
+        calibrate_vectorized(f_ravel32, i_ravel, q_ravel, center, fm, pr, pb,
+                             pi, po)
     if z_output:
         return i + 1j * q
     else:
@@ -176,8 +186,10 @@ def calibrate(f, i=None, q=None, *,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef baseline_vectorized(np.ndarray[float_t, ndim=1] f, double fm, double pb[]):
-    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+cdef baseline_vectorized(np.ndarray[float_t, ndim=1] f, double fm,
+                         double pb[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(
+        f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = baseline_c(f[ii], fm, pb)
     return result
@@ -238,14 +250,17 @@ def baseline(f, *,
         f_ravel32 = f.ravel()
         z = baseline_vectorized(f_ravel32, fm, &pb[0])
     else:
-        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid data type for f: {f.dtype}. "
+                         "Only float32 and float64 are supported.")
     return z.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef resonance_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
-    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+cdef resonance_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing,
+                          double pr[], double pd[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(
+        f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = resonance_c(f[ii], decreasing, pr, pd)
     return result
@@ -321,14 +336,17 @@ def resonance(f, *,
         f_ravel32 = f.ravel()
         z = resonance_vectorized(f_ravel32, decreasing, &pr[0], &pd[0])
     else:
-        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid data type for f: {f.dtype}. "
+                         "Only float32 and float64 are supported.")
     return z.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef detuning_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing, double pr[], double pd[]):
-    cdef np.ndarray[float64_t, ndim=1] result = np.empty(f.shape[0], dtype=np.float64)
+cdef detuning_vectorized(np.ndarray[float_t, ndim=1] f, bool_t decreasing,
+                         double pr[], double pd[]):
+    cdef np.ndarray[float64_t, ndim=1] result = np.empty(
+        f.shape[0], dtype=np.float64)
     for ii in range(f.shape[0]):
         result[ii] = detuning_c(f[ii], decreasing, pr, pd)
     return result
@@ -406,14 +424,17 @@ def detuning(f, *,
         f_ravel32 = f.ravel()
         x = detuning_vectorized(f_ravel32, decreasing, &pr[0], &pd[0])
     else:
-        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid data type for f: {f.dtype}. "
+                         "Only float32 and float64 are supported.")
     return x.reshape(f.shape)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef mixer_vectorized(np.ndarray[complex128_t, ndim=1] z, double pi[], double po[]):
-    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(z.shape[0], dtype=np.complex128)
+cdef mixer_vectorized(np.ndarray[complex128_t, ndim=1] z, double pi[],
+                      double po[]):
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(
+        z.shape[0], dtype=np.complex128)
     for ii in range(z.shape[0]):
         result[ii] = mixer_c(z[ii], pi, po)
     return result
@@ -494,7 +515,8 @@ def mixer(i=None, q=None, *,
     if (i is not None) and (q is not None) and (z is None):
         i = np.asarray(i)
         q = np.asarray(q)
-        if i.shape != q.shape or np.iscomplex(i).any() or np.iscomplex(q).any():
+        if (i.shape != q.shape or np.iscomplex(i).any()
+                or np.iscomplex(q).any()):
             raise ValueError("i and q must have the same shape and be real.")
         z = i + 1j * q  # automatically creates np.complex128 type
         z_output = False
@@ -502,7 +524,8 @@ def mixer(i=None, q=None, *,
         z = np.asarray(z, dtype=np.complex128)
         z_output = True
     else:
-        raise ValueError("Supply either both i and q or z as keyword arguments.")
+        raise ValueError("Supply either both i and q or z as keyword "
+                         "arguments.")
     # call function
     cdef np.ndarray[complex128_t, ndim=1] z_ravel = z.ravel()
     result = mixer_vectorized(z_ravel, pi, po)
@@ -515,9 +538,11 @@ def mixer(i=None, q=None, *,
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef model_vectorized(np.ndarray[float_t, ndim=1] f, double fm, bool_t decreasing, double pr[], double pd[],
+cdef model_vectorized(np.ndarray[float_t, ndim=1] f, double fm,
+                      bool_t decreasing, double pr[], double pd[],
                       double pb[], double pi[], double po[]):
-    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(f.shape[0], dtype=np.complex128)
+    cdef np.ndarray[complex128_t, ndim=1] result = np.empty(
+        f.shape[0], dtype=np.complex128)
     for ii in range(f.shape[0]):
         result[ii] = model_c(f[ii], fm, decreasing, pr, pd, pb, pi, po)
     return result
@@ -611,26 +636,31 @@ def model(f, *,
     # check inputs
     if fm < 0: fm = np.median(f)  # default depends on f
     if f0 < 0: f0 = fm
-    f = np.asarray(f, dtype=np.float64)  # no copy if already an array and dtype matches
+    # no copy if already an array and dtype matches
+    f = np.asarray(f, dtype=np.float64)
     # create the parameter blocks
     cdef double pr[4]
     cdef double pd[1]
     cdef double pb[5]
     cdef double pi[2]
     cdef double po[2]
-    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0, xa, a, gain0, gain1, gain2, phase0,
-                            phase1, alpha, beta, gamma, delta)
+    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0,
+                            xa, a, gain0, gain1, gain2, phase0, phase1,
+                            alpha, beta, gamma, delta)
     # call function
     cdef np.ndarray[float32_t, ndim=1] f_ravel32
     cdef np.ndarray[float64_t, ndim=1] f_ravel64
     if f.dtype == np.float64:
         f_ravel64 = f.ravel()
-        z = model_vectorized(f_ravel64, fm, decreasing, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+        z = model_vectorized(f_ravel64, fm, decreasing, &pr[0], &pd[0], &pb[0],
+                             &pi[0], &po[0])
     elif f.dtype == np.float32:
         f_ravel32 = f.ravel()
-        z = model_vectorized(f_ravel32, fm, decreasing, &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
+        z = model_vectorized(f_ravel32, fm, decreasing, &pr[0], &pd[0], &pb[0],
+                             &pi[0], &po[0])
     else:
-        raise ValueError(f"Invalid data type for f: {f.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid data type for f: {f.dtype}. "
+                         "Only float32 and float64 are supported.")
     return z.reshape(f.shape)
 
 
@@ -696,22 +726,26 @@ def guess(f, i=None, q=None, *,
 
     """
     # estimate mixer correction from calibration data
-    alpha, beta, gamma, delta = compute_mixer_calibration(offset, imbalance, **kwargs)
+    alpha, beta, gamma, delta = compute_mixer_calibration(offset, imbalance,
+                                                          **kwargs)
     # parse input data
     if (i is not None) and (q is not None):
         i = np.asarray(i)
         q = np.asarray(q)
-        if i.shape != q.shape or np.iscomplex(i).any() or np.iscomplex(q).any():
+        if (i.shape != q.shape or np.iscomplex(i).any()
+                or np.iscomplex(q).any()):
             raise ValueError("i and q must have the same shape and be real.")
     elif z is not None:
         z = np.asarray(z)
         i = z.real
         q = z.imag
     else:
-        raise ValueError("Neither i and q or z were supplied as keyword arguments.")
+        raise ValueError("Neither i and q or z were supplied as keyword "
+                         "arguments.")
     # remove the IQ mixer offset and imbalance
-    i, q = calibrate(f, i, q, alpha=alpha, beta=beta, gamma=gamma, delta=delta, gain0=1.0,
-                     gain1=0.0, gain2=0.0, phase0=0.0, phase1=0.0, fm=1.0)
+    i, q = calibrate(f, i, q, alpha=alpha, beta=beta, gamma=gamma, delta=delta,
+                     gain0=1.0, gain1=0.0, gain2=0.0, phase0=0.0,
+                     phase1=0.0, fm=1.0)
     # compute the magnitude and phase of the scattering parameter
     magnitude = np.sqrt(i**2 + q**2)
     phase = np.unwrap(np.arctan2(q, i))
@@ -722,8 +756,10 @@ def guess(f, i=None, q=None, *,
     fm = kwargs.get('fm', np.median(f))  # frequency at the center of the data
     def xm(fx): return (fx - fm) / fm
     # get the magnitude and phase data to fit
-    mag_ends = np.concatenate((magnitude[:f_index_5pc], magnitude[-f_index_5pc + 1:]))
-    phase_ends = np.concatenate((phase[:f_index_5pc], phase[-f_index_5pc + 1:]))
+    mag_ends = np.concatenate((magnitude[:f_index_5pc],
+                               magnitude[-f_index_5pc + 1:]))
+    phase_ends = np.concatenate((phase[:f_index_5pc],
+                                 phase[-f_index_5pc + 1:]))
     freq_ends = xm(np.concatenate((f[:f_index_5pc], f[-f_index_5pc + 1:])))
     # calculate the gain polynomials
     gain_poly = np.polyfit(freq_ends, mag_ends, 2)
@@ -738,12 +774,14 @@ def guess(f, i=None, q=None, *,
     # guess Q values
     mag_max = np.polyval(gain_poly, xm(f[f_index_min]))
     mag_min = magnitude[f_index_min]
-    fwhm = np.sqrt((mag_max**2 + mag_min**2) / 2.)  # fwhm is for power not amplitude
+    # fwhm is for power not amplitude
+    fwhm = np.sqrt((mag_max**2 + mag_min**2) / 2.)
     fwhm_mask = magnitude < fwhm
     regions, _ = label(fwhm_mask)  # find the regions where magnitude < fwhm
     region = regions[f_index_min]  # pick the one that includes the minimum
     try:
-        f_masked = f[find_objects(regions, max_label=region)[-1]]  # mask f to only include that region
+        # mask f to only include that region
+        f_masked = f[find_objects(regions, max_label=region)[-1]]
         bandwidth = f_masked.max() - f_masked.min()  # find the bandwidth
     except IndexError:  # no found region
         bandwidth = 0  # defer calculation
@@ -757,14 +795,19 @@ def guess(f, i=None, q=None, *,
     qc_guess = 1. / (1. / q0_guess - 1. / qi_guess)
     if qc_guess == 0: qc_guess = 1e4
 
-    params = {'qi': qi_guess, 'qc': qc_guess, 'f0': f0_guess, 'xa': 0.0, 'a': 0 if not nonlinear else 0.0025,
-              'gain0': gain_poly[2], 'gain1': gain_poly[1], 'gain2': gain_poly[0], 'phase0': phase_poly[1],
-              'phase1': phase_poly[0], 'gamma': gamma, 'delta': delta, 'alpha': alpha, 'beta': beta,
-              'fm': fm, 'decreasing': kwargs.get('decreasing', DEFAULT_DECREASING)}
+    params = {'qi': qi_guess, 'qc': qc_guess, 'f0': f0_guess, 'xa': 0.0,
+              'a': 0 if not nonlinear else 0.0025,
+              'gain0': gain_poly[2], 'gain1': gain_poly[1],
+              'gain2': gain_poly[0], 'phase0': phase_poly[1],
+              'phase1': phase_poly[0], 'gamma': gamma, 'delta': delta,
+              'alpha': alpha, 'beta': beta, 'fm': fm,
+              'decreasing': kwargs.get('decreasing', DEFAULT_DECREASING)}
     # input kwargs take priority if they are parameters
-    params.update({key: value for key, value in kwargs.items() if key in params.keys()})
+    params.update({key: value for key, value in kwargs.items()
+                   if key in params.keys()})
     # coerce to float type
-    params = {key: float(value) if key != 'decreasing' else bool(value) for key, value in params.items()}
+    params = {key: float(value) if key != 'decreasing' else bool(value)
+              for key, value in params.items()}
     return params
 
 
@@ -933,7 +976,8 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
                     The Bayesian information criterion  for the fit.
 
     """
-    # fm is not a fit parameter. It sets the frequency normalization for the gain and phase background.
+    # fm is not a fit parameter. It sets the frequency normalization for the
+    # gain and phase background.
     if fm < 0: fm = np.median(f)
     if f0 < 0: f0 = fm
     # initialize i & q arrays
@@ -945,14 +989,16 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
         i = z.real
         q = z.imag
     else:
-        raise ValueError("Supply either both i and q or z as keyword arguments.")
+        raise ValueError("Supply either both i and q or z as keyword "
+                         "arguments.")
     # check that all of the arrays are the same size
     if f.shape[0] != i.shape[0] or f.shape[0] != q.shape[0]:
         raise ValueError("All input arrays must have the same size.")
     # coerce variance to the correct shape and dtype
     if variance is None:
         variance = 1 + 1j
-    sigma = np.asarray(np.sqrt(variance.real) + 1j * np.sqrt(variance.imag), dtype=np.complex128)
+    sigma = np.asarray(np.sqrt(variance.real) + 1j * np.sqrt(variance.imag),
+                       dtype=np.complex128)
     sigma = np.broadcast_to(sigma, f.shape[0])
     # scale data
     cdef double scale = max(np.abs(i).max(), np.abs(q).max())
@@ -986,12 +1032,15 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     cdef double pb[5]
     cdef double pi[2]
     cdef double po[2]
-    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc, f0 / f_scale, xa, a, gain0 / scale,
-                            gain1 / scale, gain2 / scale, phase0, phase1, alpha, beta, gamma / scale, delta / scale)
+    create_parameter_blocks(&pr[0], &pd[0], &pb[0], &pi[0], &po[0], qi, qc,
+                            f0 / f_scale, xa, a, gain0 / scale,
+                            gain1 / scale, gain2 / scale, phase0, phase1,
+                            alpha, beta, gamma / scale, delta / scale)
     # create guess to save for later
-    guess = {'qi': qi, 'qc': qc, 'f0': f0, 'xa': xa, 'a': a, 'gain0': gain0, 'gain1': gain1, 'gain2': gain2,
-             'phase0': phase0, 'phase1': phase1, 'alpha': alpha, 'beta': beta, 'gamma': gamma, 'delta': delta,
-             'fm': fm, 'decreasing': decreasing}
+    guess = {'qi': qi, 'qc': qc, 'f0': f0, 'xa': xa, 'a': a, 'gain0': gain0,
+             'gain1': gain1, 'gain2': gain2, 'phase0': phase0,
+             'phase1': phase1, 'alpha': alpha, 'beta': beta, 'gamma': gamma,
+             'delta': delta, 'fm': fm, 'decreasing': decreasing}
     # run the fitting code
     cdef string out
     cdef int varied = 0
@@ -999,35 +1048,48 @@ def fit(np.ndarray[float_t, ndim=1] f, i=None, q=None, *,
     if i.dtype == np.float64:
         i_view64 = i_scaled
         q_view64 = q_scaled
-        summary = fit_c(&f_view[0], &i_view64[0], &q_view64[0], &weight_view[0], f_view.shape[0], fm / f_scale,
-                        decreasing, baseline, nonlinear, imbalance, offset, numerical, max_iterations, threads, varied,
-                        success, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
+        summary = fit_c(&f_view[0], &i_view64[0], &q_view64[0],
+                        &weight_view[0], f_view.shape[0], fm / f_scale,
+                        decreasing, baseline, nonlinear, imbalance, offset,
+                        numerical, max_iterations, threads, varied, success,
+                        &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
     elif i.dtype == np.float32:
         i_view32 = i_scaled
         q_view32 = q_scaled
-        summary = fit_c(&f_view[0], &i_view32[0], &q_view32[0], &weight_view[0], f_view.shape[0], fm / f_scale,
-                        decreasing, baseline, nonlinear, imbalance, offset, numerical, max_iterations, threads, varied,
-                        success, &pr[0], &pd[0], &pb[0], &pi[0], &po[0]).decode("utf-8").strip()
+        summary = fit_c(&f_view[0], &i_view32[0], &q_view32[0],
+                        &weight_view[0], f_view.shape[0], fm / f_scale,
+                        decreasing, baseline, nonlinear, imbalance, offset,
+                        numerical, max_iterations, threads, varied, success,
+                        &pr[0], &pd[0], &pb[0], &pi[0], &po[0])
     else:
-        raise ValueError(f"Invalid loop data type: {i.dtype}. Only float32 and float64 are supported.")
+        raise ValueError(f"Invalid loop data type: {i.dtype}. "
+                         "Only float32 and float64 are supported.")
     # log the summary
+    summary = summary.decode("utf-8").strip()
     log.debug(summary)
     # return the fitted parameter values
-    result = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline, 'nonlinear': nonlinear, 'imbalance': imbalance,
-              'offset': offset, 'max_iterations': max_iterations, 'threads': threads, 'guess': guess}  # independent
-    result.update({"summary": summary, "size": 2 * f.shape[0], "varied": varied, "success": success})  # metrics
-    result.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2] * f_scale, 'xa': pr[3]})  # resonance
+    result = {'fm': fm, 'decreasing': decreasing, 'baseline': baseline,
+              'nonlinear': nonlinear, 'imbalance': imbalance,
+              'offset': offset, 'max_iterations': max_iterations,
+              'threads': threads, 'guess': guess}  # independent
+    result.update({"summary": summary, "size": 2 * f.shape[0],
+                   "varied": varied, "success": success})  # metrics
+    result.update({'qi': pr[0], 'qc': pr[1], 'f0': pr[2] * f_scale,
+                   'xa': pr[3]})  # resonance
     result.update({'a': pow(pd[0], 2)})  # detuning
-    result.update({'gain0': pb[0] * scale, 'gain1': pb[1] * scale, 'gain2': pb[2] * scale, 'phase0': pb[3],
+    result.update({'gain0': pb[0] * scale, 'gain1': pb[1] * scale,
+                   'gain2': pb[2] * scale, 'phase0': pb[3],
                    'phase1': pb[4]})  # baseline
     result.update({'alpha': pi[0], 'beta': pi[1]})  # imbalance
     result.update({'gamma': po[0] * scale, 'delta': po[1] * scale})  # offset
     result.update({'q0': 1 / (1 / result['qi'] + 1 / result['qc'])})  # derived
     # compute statistics
     cdef np.ndarray[complex128_t, ndim=1] m = model(f, **result)
-    chi_squared = (((m.real - i) / sigma.real)**2).sum() + (((m.imag - q) / sigma.imag)**2).sum()
+    chi_squared = ((((m.real - i) / sigma.real)**2).sum()
+                   + (((m.imag - q) / sigma.imag)**2).sum())
     # -2 * Log(likelihood)
-    scaled_likelihood = chi_squared + np.log(2 * np.pi * sigma.real).sum() + np.log(2 * np.pi * sigma.imag).sum()
+    scaled_likelihood = (chi_squared + np.log(2 * np.pi * sigma.real).sum()
+                         + np.log(2 * np.pi * sigma.imag).sum())
     aic = 2 * result['varied'] + scaled_likelihood
     bic = result['varied'] * np.log(2 * f.shape[0]) + scaled_likelihood
     result.update({'chi_squared': chi_squared, 'aic': aic, 'bic': bic})
