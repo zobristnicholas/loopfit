@@ -16,17 +16,19 @@ def get_version(path):
 
 
 if "clean" not in sys.argv:  # don't run if already cleaning
-    # clean the build directory before running to avoid build errors when developing
+    # clean the build directory before running to avoid build errors when
+    # developing
     subprocess.check_call(["python", os.path.abspath(__file__), "clean"])
 
 
 setup(
     name='loopfit',
-    description='Superconducting resonator IQ loop fitting optimized for speed',
+    description='Superconducting resonator IQ loop fitting optimized for '
+                'speed',
     version=get_version("src/loopfit/__init__.py"),
     author='Nicholas Zobrist',
     license='GPLv3',
-    url='http://github.com/zobristnicholas/loopfit',
+    url='https://github.com/zobristnicholas/loopfit',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     install_requires=['numpy', 'scipy']
