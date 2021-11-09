@@ -1,25 +1,52 @@
+import pathlib
+import logging
 import numpy as np
 
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
-def load_touchstone(file_name):
+
+def load_touchstone(file_name, component=(2, 1)):
     """
-    Function for loading in touchstone files. The file_name must
-    point to a version 1 or 2 touchstone file.
+    Function for loading a scattering matrix element from a touchstone
+    file. The file_name must point to a version 1 or 2 touchstone file.
 
     Args:
         file_name: string
             A file name or path to a touchstone version 1 or 2 file.
+        component: 2-tuple of integers
+            The (row, column) of the scattering matrix element.
 
     Returns:
         f: numpy.ndarray
             The resonance frequencies in GHz.
         i: numpy.ndarray
-            The in phase component of the scattering data.
+            The in-phase (real) component of the scattering data.
         q: numpy.ndarray
-            The quadrature component of the scattering data.
+            The quadrature (imaginary) component of the scattering data.
     """
+    # Get the number of ports from the extension (version 1)
+    extension = pathlib.Path(file_name).suffix
+    if (extension[0] == 's') and (extension[-1] == 'p'):  # sNp
+        try:
+            n_ports = int(extension[1:-1])
+            version = 1
+        except ValueError:
+            message = ("The file name does not have a s-parameter extension. "
+                       f"It is [{extension}] instead. Please, correct the "
+                       "extension to the form: 'sNp', where N is any integer.")
+            raise IOError(message)
+    elif extension == 'ts':
+        n_ports = None
+    else:
+        message = ('The filename does not have the expected Touchstone '
+                   'extension (.sNp or .ts)')
+        raise IOError(message)
+
+    values = []
+    flip_port_order = False
+    matrix_format = 'full'
     with open(file_name) as fid:
-        values = []
         while True:
             line = fid.readline()
 
@@ -37,20 +64,29 @@ def load_touchstone(file_name):
 
             # Skip the version line.
             if line.startswith('[version]'):
-                continue
+                version = int(line.partition('[version]')[2])
 
-            # Skip the number of ports line.
+            # Grab the number of ports if it exists.
             if line.startswith('[number of ports]'):
-                continue
+                n_ports = int(line.partition('[number of ports]')[2])
 
             # Skip the data order line since it's the same for all Sonnet
             # outputs.
             if line.startswith('[two-port data order]'):
-                continue
+                order = line.partition('[two-port data order]')[2].strip()
+                if order == '21_12':
+                    flip_port_order = True
 
             # Skip the number of frequencies line.
             if line.startswith('[number of frequencies]'):
                 continue
+
+            if line.startswith('[matrix format]'):
+                matrix_format = line.partition('[matrix format]')[2].strip()
+
+            if line.startswith('[mixed-mode order]'):
+                message = "The mixed-mode order data format is not supported."
+                raise IOError(message)
 
             # skip the network data line.
             if line.startswith('[network data]'):
@@ -72,32 +108,54 @@ def load_touchstone(file_name):
                 data_format = options[2]
                 continue
 
-            # Collect all of the values making sure they are the right length.
-            data = [float(v) for v in line.split()]
-            if len(data) != 9:
-                raise ValueError("The data does not come from a two port "
-                                 "network.")
-            values.extend(data)
+            # Collect all of the values.
+            values.extend([float(v) for v in line.split()])
 
-    # Reshape into rows of f, s11, s21, s12, s22, s11, ...
-    values = np.asarray(values).reshape((-1, 9))
+    # Version 1 files have weird port order for 2 port matricies
+    if version == 1 and n_ports == 2:
+        flip_port_order = True
+
+    # Reshape into rows of f, s11, s12, s13, s21, s22, s23, ...
+    if matrix_format == 'full':
+        values = np.asarray(values).reshape((-1, 2 * n_ports**2 + 1))
+    else:  # lower or upper
+        values = np.asarray(values).reshape((-1, n_ports**2 + n_ports + 1))
+
+    # Remove noise values
+    noise = np.where(np.diff(values[:, 0]) < 0)[0]  # f should increase
+    if len(noise) != 0:
+        values = values[noise[0] + 1:, :]
 
     # Extract the frequency in GHz.
     multiplier = {'hz': 1.0, 'khz': 1e3, 'mhz': 1e6, 'ghz': 1e9}[unit]
     f = values[:, 0] * multiplier / 1e9  # always in GHz
 
+    # Get the index of the desired component.
+    row, column = component
+    if flip_port_order:
+        row, column = column, row
+    if matrix_format == 'full':
+        index = (row - 1) * n_ports + column
+    elif matrix_format == 'lower':
+        if row < column:
+            row, column = column, row
+        index = row * (row - 1) / 2 + column
+    else:  # 'upper'
+        if row > column:
+            row, column = column, row
+        index = (n_ports * (n_ports - 1) / 2
+                 - (n_ports - row + 1) * (n_ports - row) / 2 + column)
+    index = index * 2 - 1  # components come in pairs
+
     # Extract the S21 parameter.
     if data_format == "ri":
-        values_complex = values[:, 1::2] + 1j * values[:, 2::2]
-        z = values_complex[:, 1]  # S21
+        values_complex = values[:, index] + 1j * values[:, index + 1]
     elif data_format == "ma":
-        mag = values[:, 1::2]
-        angle = np.pi / 180 * values[:, 2::2]
+        mag = values[:, index]
+        angle = np.pi / 180 * values[:, index + 1]
         values_complex = mag * np.exp(1j * angle)
-        z = values_complex[:, 1]  # S21
     else:  # == "db"
-        mag_db = values[:, 1::2]
-        angle = np.pi / 180 * values[:, 2::2]
+        mag_db = values[:, index]
+        angle = np.pi / 180 * values[:, index + 1]
         values_complex = 10**(mag_db / 20.0) * np.exp(1j * angle)
-        z = values_complex[:, 1]  # S21
     return f, z.real, z.imag
