@@ -65,10 +65,12 @@ def load_touchstone(file_name, component=(2, 1)):
             # Skip the version line.
             if line.startswith('[version]'):
                 version = float(line.partition('[version]')[2])
+                continue
 
             # Grab the number of ports if it exists.
             if line.startswith('[number of ports]'):
                 n_ports = int(line.partition('[number of ports]')[2])
+                continue
 
             # Skip the data order line since it's the same for all Sonnet
             # outputs.
@@ -76,6 +78,7 @@ def load_touchstone(file_name, component=(2, 1)):
                 order = line.partition('[two-port data order]')[2].strip()
                 if order == '21_12':
                     flip_port_order = True
+                continue
 
             # Skip the number of frequencies line.
             if line.startswith('[number of frequencies]'):
@@ -83,6 +86,7 @@ def load_touchstone(file_name, component=(2, 1)):
 
             if line.startswith('[matrix format]'):
                 matrix_format = line.partition('[matrix format]')[2].strip()
+                continue
 
             if line.startswith('[mixed-mode order]'):
                 message = "The mixed-mode order data format is not supported."
