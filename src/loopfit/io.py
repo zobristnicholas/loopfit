@@ -153,13 +153,13 @@ def load_touchstone(file_name, component=(2, 1)):
 
     # Extract the S21 parameter.
     if data_format == "ri":
-        values_complex = values[:, index] + 1j * values[:, index + 1]
+        z = values[:, index] + 1j * values[:, index + 1]
     elif data_format == "ma":
         mag = values[:, index]
         angle = np.pi / 180 * values[:, index + 1]
-        values_complex = mag * np.exp(1j * angle)
+        z = mag * np.exp(1j * angle)
     else:  # == "db"
         mag_db = values[:, index]
         angle = np.pi / 180 * values[:, index + 1]
-        values_complex = 10**(mag_db / 20.0) * np.exp(1j * angle)
+        z = 10**(mag_db / 20.0) * np.exp(1j * angle)
     return f, z.real, z.imag
