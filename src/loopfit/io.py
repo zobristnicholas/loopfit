@@ -27,7 +27,7 @@ def load_touchstone(file_name, component=(2, 1)):
     """
     # Get the number of ports from the extension (version 1)
     extension = pathlib.Path(file_name).suffix
-    if (extension[0] == 's') and (extension[-1] == 'p'):  # sNp
+    if (extension[1] == 's') and (extension[-1] == 'p'):  # sNp
         try:
             n_ports = int(extension[1:-1])
             version = 1
@@ -36,7 +36,7 @@ def load_touchstone(file_name, component=(2, 1)):
                        f"It is [{extension}] instead. Please, correct the "
                        "extension to the form: 'sNp', where N is any integer.")
             raise IOError(message)
-    elif extension == 'ts':
+    elif extension == '.ts':
         n_ports = None
     else:
         message = ('The filename does not have the expected Touchstone '
