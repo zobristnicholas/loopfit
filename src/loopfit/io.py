@@ -30,7 +30,7 @@ def load_touchstone(file_name, component=(2, 1)):
     if (extension[1] == 's') and (extension[-1] == 'p'):  # sNp
         try:
             n_ports = int(extension[1:-1])
-            version = 1
+            version = 1.
         except ValueError:
             message = ("The file name does not have a s-parameter extension. "
                        f"It is [{extension}] instead. Please, correct the "
@@ -64,7 +64,7 @@ def load_touchstone(file_name, component=(2, 1)):
 
             # Skip the version line.
             if line.startswith('[version]'):
-                version = int(line.partition('[version]')[2])
+                version = float(line.partition('[version]')[2])
 
             # Grab the number of ports if it exists.
             if line.startswith('[number of ports]'):
@@ -112,7 +112,7 @@ def load_touchstone(file_name, component=(2, 1)):
             values.extend([float(v) for v in line.split()])
 
     # Version 1 files have weird port order for 2 port matricies
-    if version == 1 and n_ports == 2:
+    if version < 2 and n_ports == 2:
         flip_port_order = True
 
     # Reshape into rows of f, s11, s12, s13, s21, s22, s23, ...
