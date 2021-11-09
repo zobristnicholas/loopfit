@@ -1,4 +1,4 @@
-__version__ = '0.4.1'
+__version__ = '0.5'
 
 from ._wrap import (fit, guess, model, detuning, resonance, baseline,
                     calibrate, mixer)
